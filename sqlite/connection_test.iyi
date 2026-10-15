@@ -1,0 +1,134 @@
+# crystal-sqlite3's spec/connection_spec.cr.
+module sqlite/connection_test
+
+import db/db/db
+import db/db/core::{Database}
+import db/db/value::{DBValue}
+import db/db/spec::{describe, it}
+import sqlite/core::{SQLite3Connection}
+import sqlite/testing/spec_helper::*
+
+def dump(source : Database, target : Database) : Nil
+  source.using_connection do |conn|
+    target.using_connection do |backup_conn|
+      conn.as(SQLite3Connection).dump(backup_conn.as(SQLite3Connection)).or_panic
+    end.or_panic
+  end.or_panic
+end
+
+def it_sets_pragma_on_connection(pragma : String, value : String, expected : DBValue) : Nil
+  it "sets pragma '#{pragma}' to #{expected}" do
+    with_db("#{DB_FILENAME}?#{pragma}=#{value}") do |db|
+      actual = db.scalar("PRAGMA #{pragma}").or_panic
+      assert actual == expected, "PRAGMA #{pragma}=#{value} reads back #{actual.inspect}"
+    end
+  end
+end
+
+describe "Connection" do
+  it "opens a database and then backs it up to another db" do
+    with_db do |db|
+      with_db("./test2.db") do |backup_db|
+        db.exec("create table person (name text, age integer)").or_panic
+        db.exec("insert into person values (\"foo\", 10)").or_panic
+
+        dump db, backup_db
+
+        backup_name = backup_db.scalar("select name from person").or_panic
+        backup_age = backup_db.scalar("select age from person").or_panic
+        source_name = db.scalar("select name from person").or_panic
+        source_age = db.scalar("select age from person").or_panic
+
+        assert({backup_name, backup_age} == {source_name, source_age})
+      end
+    end
+  end
+
+  it "opens a database, inserts records, dumps to an in-memory db, insers some more, then dumps to the source" do
+    with_db do |db|
+      with_mem_db do |in_memory_db|
+        db.exec("create table person (name text, age integer)").or_panic
+        db.exec("insert into person values (\"foo\", 10)").or_panic
+        dump db, in_memory_db
+
+        assert in_memory_db.scalar("select count(*) from person").or_panic == 1
+        in_memory_db.exec("insert into person values (\"bar\", 22)").or_panic
+        dump in_memory_db, db
+
+        assert db.scalar("select count(*) from person").or_panic == 2
+      end
+    end
+  end
+
+  it "opens a database, inserts records (>1024K), and dumps to an in-memory db" do
+    with_db do |db|
+      with_mem_db do |in_memory_db|
+        db.exec("create table person (name text, age integer)").or_panic
+        db.transaction do |tx|
+          100_000.times { tx.connection.exec("insert into person values (\"foo\", 10)").or_panic }
+        end.or_panic
+        dump db, in_memory_db
+        assert in_memory_db.scalar("select count(*) from person").or_panic == 100_000
+      end
+    end
+  end
+
+  it "opens a connection without the pool" do
+    with_cnn do |cnn|
+      assert cnn.is_a?(SQLite3Connection)
+
+      cnn.exec("create table person (name text, age integer)").or_panic
+      cnn.exec("insert into person values (\"foo\", 10)").or_panic
+
+      assert cnn.scalar("select count(*) from person").or_panic == 1
+    end
+  end
+
+  it "reports the driver name" do
+    with_cnn do |cnn|
+      assert cnn.driver_name == "sqlite3"
+    end
+  end
+
+  it "reports the server name" do
+    with_cnn do |cnn|
+      assert cnn.server_name == "SQLite"
+    end
+  end
+
+  it "reports the linked library version as the server version" do
+    with_cnn do |cnn|
+      assert cnn.server_version == cnn.scalar("select sqlite_version()").or_panic
+    end
+  end
+
+  # adjust busy_timeout pragma (default is 0)
+  it_sets_pragma_on_connection "busy_timeout", "1000", 1000_i64
+
+  # adjust cache_size pragma (default is -2000, 2MB)
+  it_sets_pragma_on_connection "cache_size", "-4000", -4000_i64
+
+  # enable foreign_keys, no need to test off (is the default)
+  it_sets_pragma_on_connection "foreign_keys", "1", 1_i64
+  it_sets_pragma_on_connection "foreign_keys", "yes", 1_i64
+  it_sets_pragma_on_connection "foreign_keys", "true", 1_i64
+  it_sets_pragma_on_connection "foreign_keys", "on", 1_i64
+
+  # change journal_mode (default is delete)
+  it_sets_pragma_on_connection "journal_mode", "delete", "delete"
+  it_sets_pragma_on_connection "journal_mode", "truncate", "truncate"
+  it_sets_pragma_on_connection "journal_mode", "persist", "persist"
+
+  # change synchronous mode (default is 2, FULL)
+  it_sets_pragma_on_connection "synchronous", "0", 0_i64
+  it_sets_pragma_on_connection "synchronous", "off", 0_i64
+  it_sets_pragma_on_connection "synchronous", "1", 1_i64
+  it_sets_pragma_on_connection "synchronous", "normal", 1_i64
+  it_sets_pragma_on_connection "synchronous", "2", 2_i64
+  it_sets_pragma_on_connection "synchronous", "full", 2_i64
+  it_sets_pragma_on_connection "synchronous", "3", 3_i64
+  it_sets_pragma_on_connection "synchronous", "extra", 3_i64
+
+  # change wal_autocheckpoint (default is 1000)
+  it_sets_pragma_on_connection "wal_autocheckpoint", "0", 0_i64
+end
