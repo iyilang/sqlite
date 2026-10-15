@@ -1,0 +1,45 @@
+# crystal-sqlite3's spec/driver_spec.cr.
+module sqlite/driver_test
+
+import std/uri::{URI}
+import db/db/db
+import db/db/spec::{describe, it}
+import sqlite/core::{SQLite3Driver, SQLite3Connection}
+import sqlite/testing/spec_helper::*
+
+def assert_filename(uri : String, filename : String) : Nil
+  actual = SQLite3Connection.filename(URI.parse(uri))
+  assert actual == filename, "#{uri} named #{actual.inspect}"
+end
+
+describe "Driver" do
+  it "should register sqlite3 name" do
+    # a metaclass's `==` is not the class's identity in iyi's prelude
+    assert ::Db::Db.driver_class("sqlite3").or_panic.to_s == SQLite3Driver.to_s
+  end
+
+  it "should get filename from uri" do
+    assert_filename("sqlite3:%3Amemory%3A", ":memory:")
+    assert_filename("sqlite3://%3Amemory%3A", ":memory:")
+
+    assert_filename("sqlite3:./file.db", "./file.db")
+    assert_filename("sqlite3://./file.db", "./file.db")
+
+    assert_filename("sqlite3:/path/to/file.db", "/path/to/file.db")
+    assert_filename("sqlite3:///path/to/file.db", "/path/to/file.db")
+
+    assert_filename("sqlite3:./file.db?max_pool_size=5", "./file.db")
+    assert_filename("sqlite3:/path/to/file.db?max_pool_size=5", "/path/to/file.db")
+    assert_filename("sqlite3://./file.db?max_pool_size=5", "./file.db")
+    assert_filename("sqlite3:///path/to/file.db?max_pool_size=5", "/path/to/file.db")
+  end
+
+  it "should use database option as file to open" do
+    with_db do |db|
+      conn = db.checkout.or_panic
+      assert conn.is_a?(SQLite3Connection)
+      conn.release
+      assert File.exists?(DB_FILENAME)
+    end
+  end
+end

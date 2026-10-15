@@ -1,0 +1,43 @@
+# What the tests share: crystal-sqlite3's `spec/spec_helper.cr`.
+#
+# Every database is a file in the working directory, deleted before and
+# after the example that opens it.
+module sqlite/testing/spec_helper
+
+import std/uri::{URI}
+import db/db/db
+import db/db/core::{Database, Connection}
+import sqlite/core::{SQLite3Connection}
+
+pub DB_FILENAME = "./test.db"
+
+# Opens `DB_FILENAME` as a pooled database for the block.
+pub def with_db(& : Database -> Nil) : Nil
+  with_db(DB_FILENAME) { |db| yield db }
+end
+
+# Opens a single connection to `DB_FILENAME` for the block.
+pub def with_cnn(& : Connection -> Nil) : Nil
+  delete_if_exists(DB_FILENAME)
+  defer delete_if_exists(DB_FILENAME)
+  ::Db::Db.connect("sqlite3:#{DB_FILENAME}") { |cnn| yield cnn }.or_panic
+end
+
+# Opens `sqlite3:` followed by *config*, a file name and maybe a query, for
+# the block.
+pub def with_db(config : String, & : Database -> Nil) : Nil
+  uri = "sqlite3:#{config}"
+  filename = SQLite3Connection.filename(URI.parse(uri))
+  delete_if_exists(filename)
+  defer delete_if_exists(filename)
+  ::Db::Db.open(uri) { |db| yield db }.or_panic
+end
+
+# Opens an in-memory database for the block.
+pub def with_mem_db(& : Database -> Nil) : Nil
+  ::Db::Db.open("sqlite3://%3Amemory%3A") { |db| yield db }.or_panic
+end
+
+pub def delete_if_exists(filename : String) : Nil
+  File.delete(filename) if File.exists?(filename)
+end
