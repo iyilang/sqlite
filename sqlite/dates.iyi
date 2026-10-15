@@ -1,0 +1,66 @@
+# How a `Time` is kept in SQLite: as `TEXT`, in UTC, written
+# `DATE_FORMAT_SUBSECOND` and read in either format. crystal-sqlite3's
+# `SQLite3::DATE_FORMAT_*` and the `Time.parse`/`Time#to_s` calls its
+# statement and result set made; iyi's `std/time` has no format strings, so
+# these two functions are the two formats.
+module sqlite/dates
+
+import std/time::{Time}
+import db/db/errors::{DBError}
+
+# `YYYY-MM-DD HH:MM:SS.mmm`, the format a `Time` argument is bound in.
+pub DATE_FORMAT_SUBSECOND = "%F %H:%M:%S.%L"
+# `YYYY-MM-DD HH:MM:SS`, SQLite's own `current_timestamp`.
+pub DATE_FORMAT_SECOND = "%F %H:%M:%S"
+
+# *time* written in `DATE_FORMAT_SUBSECOND`, or in `DATE_FORMAT_SECOND`
+# when *subsecond* is false: `2016-02-15 10:15:30.123`.
+pub def format_time(time : Time, *, subsecond : Bool = true) : String
+  text = "#{Time.pad4(time.year)}-#{Time.pad2(time.month)}-#{Time.pad2(time.day)} " \
+         "#{Time.pad2(time.hour)}:#{Time.pad2(time.minute)}:#{Time.pad2(time.second)}"
+  subsecond ? "#{text}.#{Time.pad3(time.millisecond)}" : text
+end
+
+# The UTC time *text* holds in `DATE_FORMAT_SUBSECOND` (any 1 to 9 digits
+# of fraction) or `DATE_FORMAT_SECOND`; a `DBError` naming the text when it
+# is neither, or not a date.
+pub def parse_time(text : String) : Time | DBError
+  invalid = DBError.new("Invalid SQLite3 time: #{text.inspect}, expected #{DATE_FORMAT_SUBSECOND.inspect} or #{DATE_FORMAT_SECOND.inspect}")
+  size = text.bytesize
+  return invalid if size < 19
+  bytes = text.to_unsafe
+  return invalid unless bytes[4] == '-'.ord.to_u8 && bytes[7] == '-'.ord.to_u8 && bytes[10] == ' '.ord.to_u8 &&
+                        bytes[13] == ':'.ord.to_u8 && bytes[16] == ':'.ord.to_u8
+
+  year = digits(bytes, 0, 4)
+  month = digits(bytes, 5, 2)
+  day = digits(bytes, 8, 2)
+  hour = digits(bytes, 11, 2)
+  minute = digits(bytes, 14, 2)
+  second = digits(bytes, 17, 2)
+  return invalid if year < 0 || month < 1 || month > 12 || day < 1 || day > Time.days_in_month(year, month)
+  return invalid if hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59
+
+  nanosecond = 0
+  if size > 19
+    fraction = size - 20
+    return invalid unless bytes[19] == '.'.ord.to_u8 && fraction >= 1 && fraction <= 9
+    nanosecond = digits(bytes, 20, fraction)
+    return invalid if nanosecond < 0
+    (9 - fraction).times { nanosecond *= 10 }
+  end
+
+  Time.utc(year, month, day, hour, minute, second, nanosecond: nanosecond)
+end
+
+# The number written in the *count* ASCII digits at *start*, or -1 when one
+# of them is not a digit.
+private def digits(bytes : Pointer(UInt8), start : Int32, count : Int32) : Int32
+  value = 0
+  count.times do |i|
+    byte = bytes[start + i]
+    return -1 unless byte >= '0'.ord.to_u8 && byte <= '9'.ord.to_u8
+    value = value * 10 + (byte - '0'.ord.to_u8).to_i32
+  end
+  value
+end
