@@ -1,0 +1,15 @@
+# What a failed SQLite call answers: crystal-sqlite3's `SQLite3::Exception`,
+# a `DBError` here (SPEC.md III.1).
+module sqlite/errors
+
+import db/db/errors::{DBError}
+
+# An invalid SQLite3 operation: SQLite's message for it and its result code.
+pub class SQLite3Error < DBError
+  # The internal code associated with the failure (`sqlite3_errcode`).
+  getter code : Int32
+
+  def initialize(message : String, @code : Int32)
+    super(message)
+  end
+end
