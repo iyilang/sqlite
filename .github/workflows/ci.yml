@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    env:
+      # The oldest iyi this release supports (README, Requirements).
+      IYI_VERSION: 0.17.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SQLite
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Install iyi
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/iyilang/iyi/master/install.sh | IYI_PREFIX="$HOME/.iyi" sh
+          echo "$HOME/.iyi/bin" >> "$GITHUB_PATH"
+
+      - run: iyi version
+
+      - name: Test
+        run: iyi test sqlite
+
+      - name: Build the examples
+        run: |
+          for program in examples/*.iyi; do
+            echo "building $program"
+            iyi build "$program" -o "$RUNNER_TEMP/example"
+          done
+
+      - name: Check formatting
+        run: iyi fmt --check sqlite examples
