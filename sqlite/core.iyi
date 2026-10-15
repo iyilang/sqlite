@@ -1,0 +1,756 @@
+# The driver: crystal-sqlite3's `SQLite3::Driver`, `SQLite3::Connection`,
+# `SQLite3::Statement` and `SQLite3::ResultSet`, the classes iyi-db's
+# `Driver`, `Connection`, `Statement` and `ResultSet` are subclassed by. They
+# refer to one another, and an import graph has no cycles (R-1), so they live
+# in one module, as iyi-db's own do. `LibSQLite3`, the C binding, is here
+# too: a `lib` cannot be exported, so it lives in the module that calls it,
+# with the `Flag`, `Type` and `Code` enums that name its integers.
+#
+# The names carry a `SQLite3` prefix because this module imports iyi-db's
+# `Connection`, `Statement` and `ResultSet` by those names.
+module sqlite/core
+
+import std/int
+import std/text
+import std/uri::{URI, Params}
+import std/time::{Time}
+import std/slice::{Slice, Bytes}
+import std/regex::{Regex}
+import db/db/db
+import db/db/errors::*
+import db/db/value::{DBValue, ExecResult}
+import db/db/core::{Driver, ConnectionBuilder, ResultSet, Statement, Connection}
+import sqlite/errors::{SQLite3Error}
+import sqlite/dates::{format_time, parse_time}
+
+# The flags `sqlite3_open_v2` takes (`SQLITE_OPEN_*`).
+@[Flags]
+pub enum Flag
+  READONLY       = 0x00000001 # Ok for sqlite3_open_v2()
+  READWRITE      = 0x00000002 # Ok for sqlite3_open_v2()
+  CREATE         = 0x00000004 # Ok for sqlite3_open_v2()
+  DELETEONCLOSE  = 0x00000008 # VFS only
+  EXCLUSIVE      = 0x00000010 # VFS only
+  AUTOPROXY      = 0x00000020 # VFS only
+  URI            = 0x00000040 # Ok for sqlite3_open_v2()
+  MEMORY         = 0x00000080 # Ok for sqlite3_open_v2()
+  MAIN_DB        = 0x00000100 # VFS only
+  TEMP_DB        = 0x00000200 # VFS only
+  TRANSIENT_DB   = 0x00000400 # VFS only
+  MAIN_JOURNAL   = 0x00000800 # VFS only
+  TEMP_JOURNAL   = 0x00001000 # VFS only
+  SUBJOURNAL     = 0x00002000 # VFS only
+  MASTER_JOURNAL = 0x00004000 # VFS only
+  NOMUTEX        = 0x00008000 # Ok for sqlite3_open_v2()
+  FULLMUTEX      = 0x00010000 # Ok for sqlite3_open_v2()
+  SHAREDCACHE    = 0x00020000 # Ok for sqlite3_open_v2()
+  PRIVATECACHE   = 0x00040000 # Ok for sqlite3_open_v2()
+  WAL            = 0x00080000 # VFS only
+end
+
+# Each of the possible types of an SQLite3 column.
+pub enum Type
+  INTEGER = 1
+  FLOAT   = 2
+  TEXT    = 3
+  BLOB    = 4
+  NULL    = 5
+end
+
+# The result codes of the C functions.
+pub enum Code
+  # Successful result
+  OKAY = 0
+  # Generic error
+  ERROR = 1
+  # Internal logic error in SQLite
+  INTERNAL = 2
+  # Access permission denied
+  PERM = 3
+  # Callback routine requested an abort
+  ABORT = 4
+  # The database file is locked
+  BUSY = 5
+  # A table in the database is locked
+  LOCKED = 6
+  # A malloc() failed
+  NOMEM = 7
+  # Attempt to write a readonly database
+  READONLY = 8
+  # Operation terminated by sqlite3_interrupt()
+  INTERRUPT = 9
+  # Some kind of disk I/O error occurred
+  IOERR = 10
+  # The database disk image is malformed
+  CORRUPT = 11
+  # Unknown opcode in sqlite3_file_control()
+  NOTFOUND = 12
+  # Insertion failed because database is full
+  FULL = 13
+  # Unable to open the database file
+  CANTOPEN = 14
+  # Database lock protocol error
+  PROTOCOL = 15
+  # Internal use only
+  EMPTY = 16
+  # The database schema changed
+  SCHEMA = 17
+  # String or BLOB exceeds size limit
+  TOOBIG = 18
+  # Abort due to constraint violation
+  CONSTRAINT = 19
+  # Data type mismatch
+  MISMATCH = 20
+  # Library used incorrectly
+  MISUSE = 21
+  # Uses OS features not supported on host
+  NOLFS = 22
+  # Authorization denied
+  AUTH = 23
+  # Not used
+  FORMAT = 24
+  # 2nd parameter to sqlite3_bind out of range
+  RANGE = 25
+  # File opened that is not a database file
+  NOTADB = 26
+  # Notifications from sqlite3_log()
+  NOTICE = 27
+  # Warnings from sqlite3_log()
+  WARNING = 28
+  # sqlite3_step() has another row ready
+  ROW = 100
+  # sqlite3_step() has finished executing
+  DONE = 101
+end
+
+# `sqlite3_bind_text`'s and `sqlite3_bind_blob`'s destructor argument
+# `SQLITE_TRANSIENT`: SQLite copies the bytes before the call returns.
+private def transient : Void*
+  Pointer(Void).new(0xFFFF_FFFF_FFFF_FFFF_u64)
+end
+
+@[Link("sqlite3")]
+{% if flag?(:msvc) %}
+  @[Link(dll: "sqlite3.dll")]
+{% end %}
+lib LibSQLite3
+  type SQLite3 = Void*
+  type Statement = Void*
+  type SQLite3Backup = Void*
+  type SQLite3Context = Void*
+  type SQLite3Value = Void*
+
+  alias FuncCallback = (SQLite3Context, Int32, SQLite3Value*) -> Void
+
+  fun open_v2 = sqlite3_open_v2(filename : UInt8*, db : SQLite3*, flags : Int32, zVfs : UInt8*) : Int32
+
+  fun libversion = sqlite3_libversion : UInt8*
+
+  fun errcode = sqlite3_errcode(SQLite3) : Int32
+  fun errmsg = sqlite3_errmsg(SQLite3) : UInt8*
+
+  fun backup_init = sqlite3_backup_init(SQLite3, UInt8*, SQLite3, UInt8*) : SQLite3Backup
+  fun backup_step = sqlite3_backup_step(SQLite3Backup, Int32) : Int32
+  fun backup_finish = sqlite3_backup_finish(SQLite3Backup) : Int32
+
+  fun prepare_v2 = sqlite3_prepare_v2(db : SQLite3, zSql : UInt8*, nByte : Int32, ppStmt : Statement*, pzTail : UInt8**) : Int32
+  fun exec = sqlite3_exec(db : SQLite3, zSql : UInt8*, pCallback : Void*, pCallbackArgs : Void*, pzErrMsg : UInt8**) : Int32
+  fun step = sqlite3_step(stmt : Statement) : Int32
+  fun column_count = sqlite3_column_count(stmt : Statement) : Int32
+  fun column_type = sqlite3_column_type(stmt : Statement, iCol : Int32) : Int32
+  fun column_int64 = sqlite3_column_int64(stmt : Statement, iCol : Int32) : Int64
+  fun column_double = sqlite3_column_double(stmt : Statement, iCol : Int32) : Float64
+  fun column_text = sqlite3_column_text(stmt : Statement, iCol : Int32) : UInt8*
+  fun column_bytes = sqlite3_column_bytes(stmt : Statement, iCol : Int32) : Int32
+  fun column_blob = sqlite3_column_blob(stmt : Statement, iCol : Int32) : UInt8*
+
+  fun bind_int = sqlite3_bind_int(stmt : Statement, idx : Int32, value : Int32) : Int32
+  fun bind_int64 = sqlite3_bind_int64(stmt : Statement, idx : Int32, value : Int64) : Int32
+  fun bind_text = sqlite3_bind_text(stmt : Statement, idx : Int32, value : UInt8*, bytes : Int32, destructor : Void*) : Int32
+  fun bind_blob = sqlite3_bind_blob(stmt : Statement, idx : Int32, value : UInt8*, bytes : Int32, destructor : Void*) : Int32
+  fun bind_zeroblob = sqlite3_bind_zeroblob(stmt : Statement, idx : Int32, bytes : Int32) : Int32
+  fun bind_null = sqlite3_bind_null(stmt : Statement, idx : Int32) : Int32
+  fun bind_double = sqlite3_bind_double(stmt : Statement, idx : Int32, value : Float64) : Int32
+
+  fun reset = sqlite3_reset(stmt : Statement) : Int32
+  fun column_name = sqlite3_column_name(stmt : Statement, idx : Int32) : UInt8*
+  fun last_insert_rowid = sqlite3_last_insert_rowid(db : SQLite3) : Int64
+  fun changes = sqlite3_changes(db : SQLite3) : Int32
+
+  fun finalize = sqlite3_finalize(stmt : Statement) : Int32
+  fun close = sqlite3_close(SQLite3) : Int32
+
+  fun create_function = sqlite3_create_function(SQLite3, funcName : UInt8*, nArg : Int32, eTextRep : Int32, pApp : Void*, xFunc : FuncCallback, xStep : Void*, xFinal : Void*) : Int32
+  fun value_text = sqlite3_value_text(SQLite3Value) : UInt8*
+  fun value_bytes = sqlite3_value_bytes(SQLite3Value) : Int32
+  fun result_int = sqlite3_result_int(SQLite3Context, Int32) : Nil
+  fun result_null = sqlite3_result_null(SQLite3Context) : Nil
+  fun result_error = sqlite3_result_error(SQLite3Context, UInt8*, Int32) : Nil
+end
+
+# `eTextRep` for `sqlite3_create_function`: the arguments arrive as UTF-8.
+SQLITE_UTF8 = 1
+
+# The `regexp(pattern, text)` function SQLite's `REGEXP` operator calls,
+# registered on every connection. A pattern iyi's `Regex` refuses answers
+# an SQL error naming it; a `NULL` operand answers `NULL`.
+REGEXP_FN = ->(context : LibSQLite3::SQLite3Context, argc : Int32, argv : LibSQLite3::SQLite3Value*) do
+  regexp(context, argv)
+  nil
+end
+
+private def regexp(context : LibSQLite3::SQLite3Context, argv : LibSQLite3::SQLite3Value*) : Nil
+  pattern = value_text(argv[0])
+  text = value_text(argv[1])
+  if pattern.nil? || text.nil?
+    LibSQLite3.result_null(context)
+    return
+  end
+
+  compiled = compile_regex(pattern)
+  if compiled.is_a?(Regex)
+    LibSQLite3.result_int(context, text.matches?(compiled) ? 1 : 0)
+  else
+    LibSQLite3.result_error(context, compiled.to_unsafe, compiled.bytesize)
+  end
+end
+
+# The text of an SQL function's argument, `nil` for `NULL`.
+private def value_text(value : LibSQLite3::SQLite3Value) : String?
+  pointer = LibSQLite3.value_text(value)
+  return nil if pointer.address == 0_u64
+  string_from(pointer, LibSQLite3.value_bytes(value))
+end
+
+# *pattern* compiled, or the message it was refused with. `Regex.compile`
+# panics on a pattern it does not take, and a panic is caught only at a task
+# boundary, so the compile runs as a task.
+private def compile_regex(pattern : String) : Regex | String
+  group do |g|
+    task = g.spawn { Regex.compile(pattern) }
+    value = task.value
+    value.is_a?(Panicked) ? value.message : value
+  end
+end
+
+# The *size* bytes at *pointer* as a `String`.
+private def string_from(pointer : UInt8*, size : Int32) : String
+  String.new(size) { |buffer| buffer.copy_from(pointer, size) }
+end
+
+# The NUL-terminated C string at *pointer*.
+private def c_string(pointer : UInt8*) : String
+  size = 0
+  while pointer[size] != 0_u8
+    size += 1
+  end
+  string_from(pointer, size)
+end
+
+# A NUL-terminated copy of *text*, for the C functions that take one.
+private def to_c_string(text : String) : UInt8*
+  copy = Pointer(UInt8).malloc((text.bytesize + 1).to_u64)
+  copy.copy_from(text.to_unsafe, text.bytesize)
+  copy[text.bytesize] = 0_u8
+  copy
+end
+
+pub class SQLite3ResultSet < ResultSet
+  @column_index = 0
+
+  def initialize(statement : SQLite3Statement)
+    super(statement)
+  end
+
+  protected def do_close : Nil | DBError
+    LibSQLite3.reset(to_unsafe)
+    super
+  end
+
+  # Advances to the next row. Returns `true` if there's a next row,
+  # `false` otherwise. Must be called at least once to advance to the first
+  # row.
+  def move_next : Bool | DBError
+    @column_index = 0
+
+    code = LibSQLite3.step(to_unsafe)
+    return true if code == Code::ROW.value
+    return false if code == Code::DONE.value
+    sqlite3_statement.sqlite3_connection.last_error
+  end
+
+  def read : DBValue | DBError
+    col = @column_index
+    stmt = to_unsafe
+    value = case Type.from_value?(LibSQLite3.column_type(stmt, col))
+            when Type::INTEGER
+              LibSQLite3.column_int64(stmt, col)
+            when Type::FLOAT
+              LibSQLite3.column_double(stmt, col)
+            when Type::BLOB
+              blob = LibSQLite3.column_blob(stmt, col)
+              size = LibSQLite3.column_bytes(stmt, col)
+              bytes = Bytes.new(size)
+              bytes.to_unsafe.copy_from(blob, size) if size > 0
+              bytes
+            when Type::TEXT
+              text = LibSQLite3.column_text(stmt, col)
+              string_from(text, LibSQLite3.column_bytes(stmt, col))
+            when Type::NULL
+              nil
+            else
+              return sqlite3_statement.sqlite3_connection.last_error
+            end
+    @column_index += 1
+    value
+  end
+
+  def next_column_index : Int32
+    @column_index
+  end
+
+  def read(t : UInt8.class) : UInt8 | DBError
+    index = @column_index
+    value = read(Int64)!
+    value.to_u8? || out_of_range(index, value, "UInt8")
+  end
+
+  def read(t : (UInt8 | Nil).class) : UInt8 | Nil | DBError
+    index = @column_index
+    value = read(Int64 | Nil)!
+    return nil if value.nil?
+    value.to_u8? || out_of_range(index, value, "UInt8")
+  end
+
+  def read(t : UInt16.class) : UInt16 | DBError
+    index = @column_index
+    value = read(Int64)!
+    value.to_u16? || out_of_range(index, value, "UInt16")
+  end
+
+  def read(t : (UInt16 | Nil).class) : UInt16 | Nil | DBError
+    index = @column_index
+    value = read(Int64 | Nil)!
+    return nil if value.nil?
+    value.to_u16? || out_of_range(index, value, "UInt16")
+  end
+
+  def read(t : UInt32.class) : UInt32 | DBError
+    index = @column_index
+    value = read(Int64)!
+    value.to_u32? || out_of_range(index, value, "UInt32")
+  end
+
+  def read(t : (UInt32 | Nil).class) : UInt32 | Nil | DBError
+    index = @column_index
+    value = read(Int64 | Nil)!
+    return nil if value.nil?
+    value.to_u32? || out_of_range(index, value, "UInt32")
+  end
+
+  def read(t : Int8.class) : Int8 | DBError
+    index = @column_index
+    value = read(Int64)!
+    value.to_i8? || out_of_range(index, value, "Int8")
+  end
+
+  def read(t : (Int8 | Nil).class) : Int8 | Nil | DBError
+    index = @column_index
+    value = read(Int64 | Nil)!
+    return nil if value.nil?
+    value.to_i8? || out_of_range(index, value, "Int8")
+  end
+
+  def read(t : Int16.class) : Int16 | DBError
+    index = @column_index
+    value = read(Int64)!
+    value.to_i16? || out_of_range(index, value, "Int16")
+  end
+
+  def read(t : (Int16 | Nil).class) : Int16 | Nil | DBError
+    index = @column_index
+    value = read(Int64 | Nil)!
+    return nil if value.nil?
+    value.to_i16? || out_of_range(index, value, "Int16")
+  end
+
+  def read(t : Int32.class) : Int32 | DBError
+    index = @column_index
+    value = read(Int64)!
+    value.to_i32? || out_of_range(index, value, "Int32")
+  end
+
+  def read(t : (Int32 | Nil).class) : Int32 | Nil | DBError
+    index = @column_index
+    value = read(Int64 | Nil)!
+    return nil if value.nil?
+    value.to_i32? || out_of_range(index, value, "Int32")
+  end
+
+  def read(t : Float32.class) : Float32 | DBError
+    read(Float64)!.to_f32
+  end
+
+  def read(t : (Float32 | Nil).class) : Float32 | Nil | DBError
+    value = read(Float64 | Nil)!
+    value ? value.to_f32 : nil
+  end
+
+  def read(t : Time.class) : Time | DBError
+    parse_time(read(String)!)
+  end
+
+  def read(t : (Time | Nil).class) : Time | Nil | DBError
+    value = read(String | Nil)!
+    value ? parse_time(value) : nil
+  end
+
+  def read(t : Bool.class) : Bool | DBError
+    read(Int64)! != 0
+  end
+
+  def read(t : (Bool | Nil).class) : Bool | Nil | DBError
+    value = read(Int64 | Nil)!
+    value ? value != 0 : nil
+  end
+
+  def read(klass : T.class) : T | DBError forall T
+    super
+  end
+
+  def column_count : Int32
+    LibSQLite3.column_count(to_unsafe)
+  end
+
+  def column_name(index : Int32) : String
+    c_string(LibSQLite3.column_name(to_unsafe, index))
+  end
+
+  def to_unsafe : LibSQLite3::Statement
+    sqlite3_statement.to_unsafe
+  end
+
+  protected def sqlite3_statement : SQLite3Statement
+    statement.as(SQLite3Statement)
+  end
+
+  # The error for an integer column whose *value* the *expected* type cannot
+  # hold; crystal-sqlite3's `to_u8` and friends raised `OverflowError`.
+  private def out_of_range(index : Int32, value : Int64, expected : String) : DBError
+    ColumnTypeMismatchError.new(
+      context: "#{self.class}#read",
+      column_index: index,
+      column_name: column_name(index),
+      column_type: "Int64 (#{value})",
+      expected_type: expected
+    )
+  end
+end
+
+pub class SQLite3Statement < Statement
+  @stmt : LibSQLite3::Statement
+
+  def initialize(connection : SQLite3Connection, command : String, @stmt : LibSQLite3::Statement)
+    super(connection, command)
+  end
+
+  # Compiles *command* on *connection*: the statement, or SQLite's error.
+  def self.prepare(connection : SQLite3Connection, command : String) : SQLite3Statement | DBError
+    stmt = uninitialized LibSQLite3::Statement
+    code = LibSQLite3.prepare_v2(connection.to_unsafe, command.to_unsafe, command.bytesize, pointerof(stmt), nil)
+    return connection.last_error unless code == Code::OKAY.value
+    SQLite3Statement.new(connection, command, stmt)
+  end
+
+  protected def perform_query(args : Array(DBValue)) : ResultSet | DBError
+    LibSQLite3.reset(@stmt)
+    bind_args(args)!
+    SQLite3ResultSet.new(self)
+  end
+
+  protected def perform_exec(args : Array(DBValue)) : ExecResult | DBError
+    LibSQLite3.reset(@stmt)
+    bind_args(args)!
+
+    step = LibSQLite3.step(@stmt)
+    while step == Code::ROW.value
+      step = LibSQLite3.step(@stmt)
+    end
+    return sqlite3_connection.last_error unless step == Code::DONE.value
+
+    db = sqlite3_connection.to_unsafe
+    rows_affected = LibSQLite3.changes(db).to_i64
+    last_id = LibSQLite3.last_insert_rowid(db)
+
+    ExecResult.new(rows_affected, last_id)
+  end
+
+  protected def do_close : Nil | DBError
+    closed = super
+    LibSQLite3.finalize(@stmt)
+    closed
+  end
+
+  private def bind_args(args : Array(DBValue)) : Nil | DBError
+    args.each_with_index do |arg, index|
+      bound = bind_arg(index + 1, arg)
+      return bound if bound.is_a?(DBError)
+    end
+    nil
+  end
+
+  # Binds *value* to the parameter at *index*. Text and blobs are bound
+  # `SQLITE_TRANSIENT`, so SQLite holds its own copy and nothing has to keep
+  # the iyi value alive until the statement runs.
+  private def bind_arg(index : Int32, value : DBValue) : Nil | DBError
+    code = case value
+           when Nil
+             LibSQLite3.bind_null(@stmt, index)
+           when Bool
+             LibSQLite3.bind_int(@stmt, index, value ? 1 : 0)
+           when Int8, Int16, Int32, UInt8, UInt16
+             LibSQLite3.bind_int(@stmt, index, value.to_i32)
+           when Int64, UInt32
+             LibSQLite3.bind_int64(@stmt, index, value.to_i64)
+           when Float32, Float64
+             LibSQLite3.bind_double(@stmt, index, value.to_f64)
+           when String
+             LibSQLite3.bind_text(@stmt, index, value.to_unsafe, value.bytesize, transient)
+           when Bytes
+             # A null pointer would bind `NULL`, and an empty slice may have one.
+             if value.size == 0
+               LibSQLite3.bind_zeroblob(@stmt, index, 0)
+             else
+               LibSQLite3.bind_blob(@stmt, index, value.to_unsafe, value.size, transient)
+             end
+           when Time
+             text = format_time(value)
+             LibSQLite3.bind_text(@stmt, index, text.to_unsafe, text.bytesize, transient)
+           else
+             return DBError.new("#{self.class} does not support #{value.class} params")
+           end
+    return sqlite3_connection.last_error unless code == Code::OKAY.value
+    nil
+  end
+
+  protected def sqlite3_connection : SQLite3Connection
+    connection.as(SQLite3Connection)
+  end
+
+  def to_unsafe : LibSQLite3::Statement
+    @stmt
+  end
+end
+
+pub class SQLite3Connection < Connection
+  # The connection's own options, from the URI: the file and the PRAGMAs
+  # set when it opens.
+  pub struct Options
+    getter filename : String
+    # pragmas
+    getter busy_timeout : String?
+    getter cache_size : String?
+    getter foreign_keys : String?
+    getter journal_mode : String?
+    getter synchronous : String?
+    getter wal_autocheckpoint : String?
+
+    def initialize(@filename : String = ":memory:", @busy_timeout : String? = nil, @cache_size : String? = nil,
+                   @foreign_keys : String? = nil, @journal_mode : String? = nil, @synchronous : String? = nil,
+                   @wal_autocheckpoint : String? = nil)
+    end
+
+    # The options *uri* sets, *default*'s for the PRAGMAs it does not.
+    def self.from_uri(uri : URI, default : Options = Options.new) : Options
+      params = Params.parse(uri.query || "")
+
+      Options.new(
+        filename: SQLite3Connection.filename(uri),
+        # pragmas
+        busy_timeout: params["busy_timeout"]? || default.busy_timeout,
+        cache_size: params["cache_size"]? || default.cache_size,
+        foreign_keys: params["foreign_keys"]? || default.foreign_keys,
+        journal_mode: params["journal_mode"]? || default.journal_mode,
+        synchronous: params["synchronous"]? || default.synchronous,
+        wal_autocheckpoint: params["wal_autocheckpoint"]? || default.wal_autocheckpoint,
+      )
+    end
+
+    # The `PRAGMA` statements the options set, run when a connection opens;
+    # `nil` when they set none.
+    def pragma_statement : String?
+      res = String.build do |str|
+        pragma_append(str, "busy_timeout", busy_timeout)
+        pragma_append(str, "cache_size", cache_size)
+        pragma_append(str, "foreign_keys", foreign_keys)
+        pragma_append(str, "journal_mode", journal_mode)
+        pragma_append(str, "synchronous", synchronous)
+        pragma_append(str, "wal_autocheckpoint", wal_autocheckpoint)
+      end
+
+      res.empty? ? nil : res
+    end
+
+    private def pragma_append(io : String::Builder, key : String, value : String?) : Nil
+      return unless value
+      io << "PRAGMA #{key}=#{value};"
+    end
+  end
+
+  @db : LibSQLite3::SQLite3
+
+  def initialize(options : Connection::Options, @db : LibSQLite3::SQLite3)
+    super(options)
+  end
+
+  # Opens the file *sqlite3_options* names, registers `REGEXP` and runs the
+  # PRAGMAs; `ConnectionRefused`, with SQLite's error as its cause, when any
+  # of it fails.
+  def self.open(options : Connection::Options, sqlite3_options : Options) : SQLite3Connection | DBError
+    db = uninitialized LibSQLite3::SQLite3
+    flags = Flag::READWRITE | Flag::CREATE
+    code = LibSQLite3.open_v2(to_c_string(sqlite3_options.filename), pointerof(db), flags.value, nil)
+    conn = SQLite3Connection.new(options, db)
+    set_up = code == Code::OKAY.value ? conn.set_up(sqlite3_options) : conn.last_error
+    if set_up.is_a?(DBError)
+      # A handle is allocated even when opening fails, and is released here.
+      LibSQLite3.close(db)
+      return ConnectionRefused.new(set_up.message, set_up)
+    end
+    conn
+  end
+
+  protected def set_up(sqlite3_options : Options) : Nil | DBError
+    # 2 means 2 arguments
+    check(LibSQLite3.create_function(@db, to_c_string("regexp"), 2, SQLITE_UTF8, nil, REGEXP_FN, nil, nil))!
+
+    if pragma_statement = sqlite3_options.pragma_statement
+      check(LibSQLite3.exec(@db, to_c_string(pragma_statement), nil, nil, nil))!
+    end
+    nil
+  end
+
+  # The file a `sqlite3:` *uri* names: its host and path, decoded, so
+  # `sqlite3:%3Amemory%3A` is `:memory:` and `sqlite3://./file.db` is
+  # `./file.db`.
+  def self.filename(uri : URI) : String
+    URI.decode_www_form((uri.hostname || "") + uri.path)
+  end
+
+  def build_prepared_statement(query : String) : Statement | DBError
+    SQLite3Statement.prepare(self, query)
+  end
+
+  def build_unprepared_statement(query : String) : Statement | DBError
+    # sqlite3 does not support unprepared statement.
+    # All statements once prepared should be released
+    # when unneeded. Unprepared statement are not aim
+    # to leave state in the connection. Mimicking them
+    # with prepared statement would be wrong with
+    # respect connection resources.
+    DBError.new("SQLite3 driver does not support unprepared statements")
+  end
+
+  # :inherit:
+  def driver_name : String
+    "sqlite3"
+  end
+
+  # :inherit:
+  def server_name : String?
+    "SQLite"
+  end
+
+  # :inherit:
+  #
+  # SQLite is embedded, so this is the version of the linked SQLite library.
+  def server_version : String?
+    c_string(LibSQLite3.libversion)
+  end
+
+  protected def do_close : Nil | DBError
+    closed = super
+    return last_error unless LibSQLite3.close(@db) == Code::OKAY.value
+    closed
+  end
+
+  def perform_begin_transaction : Nil | DBError
+    prepared.exec("BEGIN")!
+    nil
+  end
+
+  def perform_commit_transaction : Nil | DBError
+    prepared.exec("COMMIT")!
+    nil
+  end
+
+  def perform_rollback_transaction : Nil | DBError
+    prepared.exec("ROLLBACK")!
+    nil
+  end
+
+  def perform_create_savepoint(name : String) : Nil | DBError
+    prepared.exec("SAVEPOINT #{name}")!
+    nil
+  end
+
+  def perform_release_savepoint(name : String) : Nil | DBError
+    prepared.exec("RELEASE SAVEPOINT #{name}")!
+    nil
+  end
+
+  def perform_rollback_savepoint(name : String) : Nil | DBError
+    prepared.exec("ROLLBACK TO #{name}")!
+    nil
+  end
+
+  # Dump the database to another SQLite3 database. This can be used for
+  # backing up a SQLite3 Database to disk or the opposite.
+  def dump(to : SQLite3Connection) : Nil | DBError
+    main = to_c_string("main")
+    backup_item = LibSQLite3.backup_init(to.to_unsafe, main, @db, main)
+    return to.last_error if backup_item.address == 0_u64
+
+    code = LibSQLite3.backup_step(backup_item, -1)
+    if code != Code::DONE.value
+      LibSQLite3.backup_finish(backup_item)
+      return to.last_error
+    end
+    code = LibSQLite3.backup_finish(backup_item)
+    return to.last_error if code != Code::OKAY.value
+    nil
+  end
+
+  # SQLite's error for the last call on this connection that failed:
+  # `sqlite3_errmsg` and `sqlite3_errcode`.
+  def last_error : SQLite3Error
+    SQLite3Error.new(c_string(LibSQLite3.errmsg(@db)), LibSQLite3.errcode(@db))
+  end
+
+  def to_unsafe : LibSQLite3::SQLite3
+    @db
+  end
+
+  private def check(code : Int32) : Nil | DBError
+    return last_error unless code == Code::OKAY.value
+    nil
+  end
+end
+
+pub class SQLite3ConnectionBuilder < ConnectionBuilder
+  def initialize(@options : Connection::Options, @sqlite3_options : SQLite3Connection::Options)
+  end
+
+  def build : Connection | DBError
+    SQLite3Connection.open(@options, @sqlite3_options)
+  end
+end
+
+pub class SQLite3Driver < Driver
+  def connection_builder(uri : URI) : ConnectionBuilder | DBError
+    params = Params.parse(uri.query || "")
+    SQLite3ConnectionBuilder.new(connection_options(params)!, SQLite3Connection::Options.from_uri(uri))
+  end
+end
+
+::Db::Db.register_driver "sqlite3", SQLite3Driver
