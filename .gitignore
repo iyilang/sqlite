@@ -1,0 +1,14 @@
+# Build products
+*.iyimod
+/mods/
+*.exe
+*.pdb
+
+# Databases the tests write
+/test.db
+/test2.db
+*.db-journal
+
+# Local binaries and scratch
+/bin/
+/tmp/
