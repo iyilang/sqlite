@@ -1,0 +1,89 @@
+# crystal-sqlite3's spec/result_set_spec.cr.
+module sqlite/result_set_test
+
+import std/time::{Time}
+import std/regex::{Regex}
+import db/db/db
+import db/db/errors::{DBError}
+import db/db/spec::{describe, it, expect_error}
+import sqlite/dates::{format_time}
+import sqlite/testing/spec_helper::*
+
+def assert_close(time : Time, expected : Time) : Nil
+  assert (time - expected).total_seconds.abs <= 1.0, "#{time} is not within a second of #{expected}"
+end
+
+describe "SQLite3::ResultSet" do
+  it "reads integer data types" do
+    with_db do |db|
+      db.exec("CREATE TABLE test_table (test_int integer)").or_panic
+      db.exec("INSERT INTO test_table (test_int) values (?)", 42).or_panic
+      db.query("SELECT test_int FROM test_table") do |rs|
+        rs.each do
+          assert rs.read.or_panic == 42
+        end.or_panic
+      end.or_panic
+    end
+  end
+
+  it "reads string data types" do
+    with_db do |db|
+      db.exec("CREATE TABLE test_table (test_text text)").or_panic
+      db.exec("INSERT INTO test_table (test_text) values (?), (?)", "abc", "123").or_panic
+      db.query("SELECT test_text FROM test_table") do |rs|
+        rs.each do
+          assert rs.read.or_panic.as(String).matches?(Regex.compile("abc|123"))
+        end.or_panic
+      end.or_panic
+    end
+  end
+
+  it "reads time data types" do
+    with_db do |db|
+      db.exec("CREATE TABLE test_table (test_date datetime)").or_panic
+      timestamp = Time.utc
+      db.exec("INSERT INTO test_table (test_date) values (current_timestamp)").or_panic
+      db.query("SELECT test_date FROM test_table") do |rs|
+        rs.each do
+          assert_close rs.read(Time).or_panic, timestamp
+        end.or_panic
+      end.or_panic
+    end
+  end
+
+  it "reads time stored in text fields, too" do
+    with_db do |db|
+      db.exec("CREATE TABLE test_table (test_date text)").or_panic
+      timestamp = Time.utc
+      # Try 3 different ways: our own two formats and using SQLite's current_timestamp.
+      # They should all work.
+      db.exec("INSERT INTO test_table (test_date) values (?)", format_time(timestamp)).or_panic
+      db.exec("INSERT INTO test_table (test_date) values (?)", format_time(timestamp, subsecond: false)).or_panic
+      db.exec("INSERT INTO test_table (test_date) values (current_timestamp)").or_panic
+      db.query("SELECT test_date FROM test_table") do |rs|
+        rs.each do
+          assert_close rs.read(Time).or_panic, timestamp
+        end.or_panic
+      end.or_panic
+    end
+  end
+
+  # crystal-sqlite3 raised `Time::Format::Error` for text in neither format.
+  it "answers an error for text that is not a time" do
+    with_db do |db|
+      ["2016-02-15", "2016-02-15T10:15:30", "2016-02-30 10:15:30", "2016-02-15 10:15:30.", "2016-02-15 10:15:30.1234567890"].each do |text|
+        expect_error(db.query_one("select ?", text, as: Time), DBError, "Invalid SQLite3 time", partial: true)
+      end
+      assert db.query_one("select '2016-02-15 10:15:30.5'", as: Time).or_panic == Time.utc(2016, 2, 15, 10, 15, 30, nanosecond: 500_000_000)
+    end
+  end
+
+  # crystal-sqlite3's `to_i8` and friends raised `OverflowError`.
+  it "answers an error for an integer the type cannot hold" do
+    with_db do |db|
+      expect_error(db.query_one("select 256", as: UInt8), DBError, "returned a Int64 (256) but a UInt8 was expected", partial: true)
+      expect_error(db.query_one("select -1", as: UInt32 | Nil), DBError, "returned a Int64 (-1) but a UInt32 was expected", partial: true)
+      assert db.query_one("select 255", as: UInt8).or_panic == 255_u8
+    end
+  end
+end
