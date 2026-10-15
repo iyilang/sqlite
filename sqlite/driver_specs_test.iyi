@@ -1,0 +1,172 @@
+# crystal-sqlite3's spec/db_spec.cr: crystal-db's shared driver specs
+# (`DriverSpecs`) run against SQLite3, and the driver's own examples.
+module sqlite/driver_specs_test
+
+import std/int
+import std/time::{Time}
+import std/slice::{Slice, Bytes}
+import db/db/db
+import db/db/value::{CustomValue}
+import db/db/errors::{DBError}
+import db/db/spec::{DriverSpecs, expect_error}
+import sqlite/errors::{SQLite3Error}
+import sqlite/testing/spec_helper::{DB_FILENAME, delete_if_exists}
+
+# A value no driver binds. `DBValue` is closed, so a type of a program's own
+# arrives as a `CustomValue`.
+class NotSupportedType < CustomValue
+end
+
+def cast_if_blob(expr : String, sql_type : String?) : String
+  case sql_type
+  when "blob"
+    "cast(#{expr} as blob)"
+  else
+    expr
+  end
+end
+
+def null_text(null : Bool) : String
+  null ? "NULL" : "NOT NULL"
+end
+
+DriverSpecs.run do |specs|
+  specs.support_unprepared false
+
+  specs.before do
+    delete_if_exists(DB_FILENAME)
+  end
+  specs.after do
+    delete_if_exists(DB_FILENAME)
+  end
+
+  specs.connection_string "sqlite3:#{DB_FILENAME}"
+  # ? can use many ... (:memory:)
+
+  specs.sample_value true, "int", "1", type_safe_value: false
+  specs.sample_value false, "int", "0", type_safe_value: false
+  specs.sample_value 2, "int", "2", type_safe_value: false
+  specs.sample_value 1_i64, "int", "1"
+  specs.sample_value "hello", "text", "'hello'"
+  specs.sample_value 1.5_f32, "float", "1.5", type_safe_value: false
+  specs.sample_value 1.5, "float", "1.5"
+  specs.sample_value Time.utc(2016, 2, 15), "text", "'2016-02-15 00:00:00.000'", type_safe_value: false
+  specs.sample_value Time.utc(2016, 2, 15, 10, 15, 30), "text", "'2016-02-15 10:15:30'", type_safe_value: false
+  specs.sample_value Time.utc(2016, 2, 15, 10, 15, 30), "text", "'2016-02-15 10:15:30.000'", type_safe_value: false
+  specs.sample_value Time.utc(2016, 2, 15, 10, 15, 30, nanosecond: 123000000), "text", "'2016-02-15 10:15:30.123'", type_safe_value: false
+  # crystal-sqlite3's `Time.local(..., location: Time::Location.fixed(...))`
+  # sample is not here: iyi's `Time` is UTC only.
+  specs.sample_value -128_i8, "int", "-128", type_safe_value: false
+  specs.sample_value 127_i8, "int", "127", type_safe_value: false
+  specs.sample_value 0_u8, "int", "0", type_safe_value: false
+  specs.sample_value 255_u8, "int", "255", type_safe_value: false
+  specs.sample_value -32768_i16, "int", "-32768", type_safe_value: false
+  specs.sample_value 32767_i16, "int", "32767", type_safe_value: false
+  specs.sample_value 0_u16, "int", "0", type_safe_value: false
+  specs.sample_value 65535_u16, "int", "65535", type_safe_value: false
+  specs.sample_value -2147483648, "int", "-2147483648", type_safe_value: false
+  specs.sample_value 2147483647, "int", "2147483647", type_safe_value: false
+  specs.sample_value 0_u32, "int", "0", type_safe_value: false
+  specs.sample_value 4294967295_u32, "int", "4294967295", type_safe_value: false
+  specs.sample_value -9223372036854775808_i64, "int", "-9223372036854775808", type_safe_value: false
+  specs.sample_value 9223372036854775807_i64, "int", "9223372036854775807", type_safe_value: false
+
+  ary = [0x53_u8, 0x51_u8, 0x4C_u8, 0x69_u8, 0x74_u8, 0x65_u8]
+  specs.sample_value Bytes.new(ary.size) { |i| ary[i] }, "blob", "X'53514C697465'" # , type_safe_value: false
+
+  specs.binding_syntax do |index|
+    "?"
+  end
+
+  specs.create_table_1column_syntax do |table_name, col1|
+    "create table #{table_name} (#{col1.name} #{col1.sql_type} #{null_text(col1.null)})"
+  end
+
+  specs.create_table_2columns_syntax do |table_name, col1, col2|
+    "create table #{table_name} (#{col1.name} #{col1.sql_type} #{null_text(col1.null)}, #{col2.name} #{col2.sql_type} #{null_text(col2.null)})"
+  end
+
+  specs.select_1column_syntax do |table_name, col1|
+    "select #{cast_if_blob(col1.name, col1.sql_type)} from #{table_name}"
+  end
+
+  specs.select_2columns_syntax do |table_name, col1, col2|
+    "select #{cast_if_blob(col1.name, col1.sql_type)}, #{cast_if_blob(col2.name, col2.sql_type)} from #{table_name}"
+  end
+
+  specs.select_count_syntax do |table_name|
+    "select count(*) from #{table_name}"
+  end
+
+  specs.select_scalar_syntax do |expression, sql_type|
+    "select #{cast_if_blob(expression, sql_type)}"
+  end
+
+  specs.insert_1column_syntax do |table_name, col, expression|
+    "insert into #{table_name} (#{col.name}) values (#{expression})"
+  end
+
+  specs.insert_2columns_syntax do |table_name, col1, expr1, col2, expr2|
+    "insert into #{table_name} (#{col1.name}, #{col2.name}) values (#{expr1}, #{expr2})"
+  end
+
+  specs.drop_table_if_exists_syntax do |table_name|
+    "drop table if exists #{table_name}"
+  end
+
+  specs.it "gets last insert row id", prepared: :both do |db|
+    db.exec("create table person (name text, age integer)").or_panic
+    db.exec(%(insert into person values ("foo", 10))).or_panic
+    res = db.exec(%(insert into person values ("foo", 10))).or_panic
+    assert res.last_insert_id == 2
+    assert res.rows_affected == 1
+  end
+
+  # TODO timestamp support
+
+  specs.it "raises on unsupported param types" do |db|
+    expect_error(db.query("select ?", NotSupportedType.new), DBError,
+      "Sqlite::Core::SQLite3Statement does not support Sqlite::DriverSpecsTest::NotSupportedType params")
+  end
+
+  specs.it "ensures statements are closed" do |db|
+    db.exec(%(create table if not exists a (i int not null, str text not null);)).or_panic
+    db.exec(%(insert into a (i, str) values (23, "bai bai");)).or_panic
+
+    2.times do |i|
+      ::Db::Db.open(specs.connection_string) do |db|
+        db.query("SELECT i, str FROM a WHERE i = ?", 23) do |rs|
+          rs.move_next.or_panic
+          nil
+        end.or_panic
+
+        db.exec("UPDATE a SET i = ? WHERE i = ?", 23, 23).or_panic
+        nil
+      end.or_panic
+    end
+  end
+
+  specs.it "handles single-step pragma statements" do |db|
+    db.exec(%(PRAGMA synchronous = OFF)).or_panic
+  end
+
+  specs.it "handles multi-step pragma statements" do |db|
+    db.exec(%(PRAGMA journal_mode = memory)).or_panic
+  end
+
+  specs.it "handles REGEXP operator" do |db|
+    assert db.scalar("select 'unmatching text' REGEXP '^m'").or_panic == 0
+    assert db.scalar("select 'matching text' REGEXP '^m'").or_panic == 1
+  end
+
+  # crystal-sqlite3 raised `Regex`'s exception through SQLite's frames.
+  specs.it "answers an SQL error for a REGEXP pattern Regex refuses" do |db|
+    expect_error(db.scalar("select 'text' REGEXP '('"), SQLite3Error, "unmatched '('", partial: true)
+    assert db.scalar("select 'text' REGEXP 't'").or_panic == 1
+  end
+
+  specs.it "does not re-raise the last error on db.close" do |db|
+    db.exec("create table t (id integer primary key)").or_panic
+    expect_error(db.exec(%(insert into t values (1), (1))), SQLite3Error, "UNIQUE constraint failed: t.id")
+  end
+end
