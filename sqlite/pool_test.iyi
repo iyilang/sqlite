@@ -1,0 +1,40 @@
+# crystal-sqlite3's spec/pool_spec.cr.
+#
+# crystal-sqlite3 spawned fibers and waited on a channel; here they are the
+# tasks of a group, which waits for them as it ends (SPEC.md III.4.1).
+module sqlite/pool_test
+
+import db/db/db
+import db/db/spec::{describe, it}
+import sqlite/testing/spec_helper::*
+
+describe "DB::Pool" do
+  it "should write from multiple connections" do
+    fibers = 5
+    max_n = 50
+    with_db("#{DB_FILENAME}?max_pool_size=#{fibers}") do |db|
+      db.exec("create table numbers (n integer, fiber integer)").or_panic
+
+      group do |g|
+        fibers.times do |f|
+          g.spawn do
+            (1..max_n).each do |n|
+              db.exec("insert into numbers (n, fiber) values (?, ?)", n, f).or_panic
+              sleep 10
+            end
+            0
+          end
+        end
+      end
+
+      # all numbers were inserted
+      s = fibers * max_n * (max_n + 1) // 2
+      assert db.scalar("select sum(n) from numbers").or_panic == s
+
+      # numbers were not inserted one fiber at a time
+      rows = db.query_all("select n, fiber from numbers", as: Tuple(Int32, Int32)).or_panic
+      fibers_in_order = rows.map { |row| row[1] }
+      assert fibers_in_order != fibers_in_order.sorted
+    end
+  end
+end
