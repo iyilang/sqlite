@@ -12,7 +12,7 @@ require: errors are values, types are closed, and tasks are structured.
 
 ## Requirements
 
-iyi 0.18.0 or later, iyi-db 0.1.1 (required by this package's `iyi.mod`), and
+iyi 0.18.0 or later, iyi-db 0.2.0 (required by this package's `iyi.mod`), and
 the SQLite library (`libsqlite3`):
 
 * **Linux:** the development package, `apt install libsqlite3-dev`.
@@ -42,13 +42,13 @@ package. Importing `sqlite` (or `sqlite/sqlite/core`) registers the driver for
 ```iyi
 module app
 
-import db/db/db
+import db
 import db/db/errors::{DBError}
 import db/db/value::{DBValue}
 import sqlite
 
 def contacts : Nil | DBError
-  Db::Db.open("sqlite3:./data.db") do |db|
+  Db.open("sqlite3:./data.db") do |db|
     db.exec("create table contacts (name text, age integer)")!
     db.exec("insert into contacts values (?, ?)", "John Doe", 30)!
 
@@ -119,7 +119,7 @@ You can adjust certain [SQLite3 PRAGMAs](https://www.sqlite.org/pragma.html)
 automatically when the connection is created by using the query parameters:
 
 ```iyi
-Db::Db.open("sqlite3:./data.db?journal_mode=wal&synchronous=normal") do |db|
+Db.open("sqlite3:./data.db?journal_mode=wal&synchronous=normal") do |db|
   # this database now uses WAL journal and normal synchronous mode
   # (defaults were `delete` and `full`, respectively)
 end

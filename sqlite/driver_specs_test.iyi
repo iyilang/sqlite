@@ -5,7 +5,7 @@ module sqlite/driver_specs_test
 import std/int
 import std/time::{Time}
 import std/slice::{Slice, Bytes}
-import db/db/db
+import db
 import db/db/value::{CustomValue}
 import db/db/errors::{DBError}
 import db/db/spec::{DriverSpecs, expect_error}
@@ -134,7 +134,7 @@ DriverSpecs.run do |specs|
     db.exec(%(insert into a (i, str) values (23, "bai bai");)).or_panic
 
     2.times do |i|
-      ::Db::Db.open(specs.connection_string) do |db|
+      ::Db.open(specs.connection_string) do |db|
         db.query("SELECT i, str FROM a WHERE i = ?", 23) do |rs|
           rs.move_next.or_panic
           nil

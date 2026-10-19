@@ -4,10 +4,10 @@
 # Importing this module registers the driver for `sqlite3:` URIs:
 #
 # ```
-# import db/db/db
+# import db
 # import sqlite
 #
-# Db::Db.open("sqlite3:./data.db") do |db|
+# Db.open("sqlite3:./data.db") do |db|
 #   puts db.scalar("select sqlite_version()")!
 # end
 # ```

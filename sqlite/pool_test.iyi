@@ -4,7 +4,7 @@
 # tasks of a group, which waits for them as it ends (SPEC.md III.4.1).
 module sqlite/pool_test
 
-import db/db/db
+import db
 import db/db/spec::{describe, it}
 import sqlite/testing/spec_helper::*
 

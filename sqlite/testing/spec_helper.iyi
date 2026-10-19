@@ -5,7 +5,7 @@
 module sqlite/testing/spec_helper
 
 import std/uri::{URI}
-import db/db/db
+import db
 import db/db/core::{Database, Connection}
 import sqlite/core::{SQLite3Connection}
 
@@ -20,7 +20,7 @@ end
 pub def with_cnn(& : Connection -> Nil) : Nil
   delete_if_exists(DB_FILENAME)
   defer delete_if_exists(DB_FILENAME)
-  ::Db::Db.connect("sqlite3:#{DB_FILENAME}") { |cnn| yield cnn }.or_panic
+  ::Db.connect("sqlite3:#{DB_FILENAME}") { |cnn| yield cnn }.or_panic
 end
 
 # Opens `sqlite3:` followed by *config*, a file name and maybe a query, for
@@ -30,12 +30,12 @@ pub def with_db(config : String, & : Database -> Nil) : Nil
   filename = SQLite3Connection.filename(URI.parse(uri))
   delete_if_exists(filename)
   defer delete_if_exists(filename)
-  ::Db::Db.open(uri) { |db| yield db }.or_panic
+  ::Db.open(uri) { |db| yield db }.or_panic
 end
 
 # Opens an in-memory database for the block.
 pub def with_mem_db(& : Database -> Nil) : Nil
-  ::Db::Db.open("sqlite3://%3Amemory%3A") { |db| yield db }.or_panic
+  ::Db.open("sqlite3://%3Amemory%3A") { |db| yield db }.or_panic
 end
 
 pub def delete_if_exists(filename : String) : Nil

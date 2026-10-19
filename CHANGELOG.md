@@ -1,6 +1,6 @@
 ## v0.2.0
 
-Requires iyi 0.18.0.
+Requires iyi 0.18.0 and iyi-db 0.2.0.
 
 * The entry point is the package's root module: `import sqlite` and
   `Sqlite::VERSION`, `Sqlite::Any`, where they were
@@ -10,6 +10,8 @@ Requires iyi 0.18.0.
   entry point off the root. The other modules are where they were.
 * `REGEXP` reads text and pattern as UTF-8 characters, as iyi 0.18.0's
   `Regex` does: `'çay' REGEXP '^.ay$'` is 1, where it was 0.
+* iyi-db's entry point is its root module too: `import db` and `Db.open`,
+  where they were `import db/db/db` and `Db::Db.open`.
 
 ## v0.1.0
 

@@ -3,7 +3,7 @@ module sqlite/result_set_test
 
 import std/time::{Time}
 import std/regex::{Regex}
-import db/db/db
+import db
 import db/db/errors::{DBError}
 import db/db/spec::{describe, it, expect_error}
 import sqlite/dates::{format_time}

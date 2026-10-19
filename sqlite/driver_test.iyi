@@ -2,7 +2,7 @@
 module sqlite/driver_test
 
 import std/uri::{URI}
-import db/db/db
+import db
 import db/db/spec::{describe, it}
 import sqlite/core::{SQLite3Driver, SQLite3Connection}
 import sqlite/testing/spec_helper::*
@@ -14,7 +14,7 @@ end
 
 describe "Driver" do
   it "should register sqlite3 name" do
-    assert ::Db::Db.driver_class("sqlite3").or_panic == SQLite3Driver
+    assert ::Db.driver_class("sqlite3").or_panic == SQLite3Driver
   end
 
   it "should get filename from uri" do

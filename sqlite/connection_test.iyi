@@ -1,7 +1,7 @@
 # crystal-sqlite3's spec/connection_spec.cr.
 module sqlite/connection_test
 
-import db/db/db
+import db
 import db/db/core::{Database}
 import db/db/value::{DBValue}
 import db/db/spec::{describe, it}

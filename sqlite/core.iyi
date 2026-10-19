@@ -16,7 +16,7 @@ import std/uri::{URI, Params}
 import std/time::{Time}
 import std/slice::{Slice, Bytes}
 import std/regex::{Regex}
-import db/db/db
+import db
 import db/db/errors::*
 import db/db/value::{DBValue, ExecResult}
 import db/db/core::{Driver, ConnectionBuilder, ResultSet, Statement, Connection}
@@ -753,4 +753,4 @@ pub class SQLite3Driver < Driver
   end
 end
 
-::Db::Db.register_driver "sqlite3", SQLite3Driver
+::Db.register_driver "sqlite3", SQLite3Driver
