@@ -19,7 +19,7 @@ pub import sqlite/errors
 
 import db/db/value
 
-pub VERSION = "0.2.0"
+pub VERSION = "0.3.0"
 
 # The values this driver binds as arguments and reads back: iyi-db's `Any`
 # and the narrower integers. crystal-sqlite3's `SQLite3::Any`.

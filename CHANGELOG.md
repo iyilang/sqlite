@@ -1,4 +1,4 @@
-## Unreleased
+## v0.3.0
 
 * A statement whose step fails is reset. It stayed active, and SQLite
   refused every later `COMMIT` on its connection
@@ -9,7 +9,8 @@
 * A query with more than one statement answers a `DBError`. The statements
   after the first were dropped unrun.
 * `SQLite3Error#extended_code` is SQLite's extended result code
-  ([crystal-sqlite3#66](https://github.com/crystal-lang/crystal-sqlite3/issues/66)).
+  ([crystal-sqlite3#66](https://github.com/crystal-lang/crystal-sqlite3/issues/66)),
+  and `SQLite3Error.new` takes it as its third argument.
 
 ## v0.2.0
 
