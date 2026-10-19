@@ -5,7 +5,7 @@ module examples/memory
 import db/db/db
 import db/db/errors::{DBError}
 import db/db/value::{DBValue}
-import sqlite/sqlite
+import sqlite
 
 def run : Nil | DBError
   Db::Db.open("sqlite3://%3Amemory%3A") do |db|

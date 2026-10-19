@@ -12,7 +12,11 @@ iyi, on iyi-db 0.1.1, with no Crystal code left.
   characters whole.
 * Every integer type, `Float32`, `Bool` and `Time` (as UTC text) read and
   bound as crystal-sqlite3 reads and binds them.
-* Requires iyi 0.18.0, whose `Regex` reads whole UTF-8 characters.
+* Requires iyi 0.18.0, whose `Regex` reads whole UTF-8 characters, and whose
+  module artifacts leave the modules under a module's path to their own
+  ([iyi#124](https://github.com/iyilang/iyi/issues/124)): the entry point is
+  the package's root module, imported as `sqlite`, beside `sqlite/core`,
+  `sqlite/dates` and `sqlite/errors`.
 
 ### What iyi's rules changed
 

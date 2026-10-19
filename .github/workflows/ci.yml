@@ -35,4 +35,4 @@ jobs:
           done
 
       - name: Check formatting
-        run: iyi fmt --check sqlite examples
+        run: iyi fmt --check sqlite.iyi sqlite examples

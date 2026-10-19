@@ -32,9 +32,10 @@ Add it to a project under the short name `sqlite`:
 iyi get github.com/iyilang/sqlite --as sqlite
 ```
 
-Files then import its modules as `sqlite/sqlite/...`: the short name, then
-the module's path in the package. Importing `sqlite/sqlite/sqlite` (or
-`sqlite/sqlite/core`) registers the driver for `sqlite3:` URIs.
+Files then import the package's root module as `sqlite`, and its other
+modules as `sqlite/sqlite/...`: the short name, then the module's path in the
+package. Importing `sqlite` (or `sqlite/sqlite/core`) registers the driver for
+`sqlite3:` URIs.
 
 ## Usage
 
@@ -44,7 +45,7 @@ module app
 import db/db/db
 import db/db/errors::{DBError}
 import db/db/value::{DBValue}
-import sqlite/sqlite/sqlite
+import sqlite
 
 def contacts : Nil | DBError
   Db::Db.open("sqlite3:./data.db") do |db|
@@ -171,7 +172,7 @@ end!
 
 | module | what it holds |
 |---|---|
-| `sqlite/sqlite` | `VERSION`, `Any`; re-exports the three below |
+| `sqlite` | `VERSION`, `Any`; re-exports the three below |
 | `sqlite/core` | `SQLite3Driver`, `SQLite3Connection` (and its `Options`), `SQLite3Statement`, `SQLite3ResultSet`, `SQLite3ConnectionBuilder`, the `Flag`, `Type` and `Code` enums; registers the driver |
 | `sqlite/dates` | `DATE_FORMAT_SUBSECOND`, `DATE_FORMAT_SECOND`, `format_time`, `parse_time` |
 | `sqlite/errors` | `SQLite3Error` |

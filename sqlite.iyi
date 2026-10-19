@@ -5,13 +5,13 @@
 #
 # ```
 # import db/db/db
-# import sqlite/sqlite/sqlite
+# import sqlite
 #
 # Db::Db.open("sqlite3:./data.db") do |db|
 #   puts db.scalar("select sqlite_version()")!
 # end
 # ```
-module sqlite/sqlite
+module sqlite
 
 pub import sqlite/core
 pub import sqlite/dates
