@@ -175,6 +175,18 @@ DriverSpecs.run do |specs|
     expect_error(db.exec(%(insert into t values (1), (1))), SQLite3Error, "UNIQUE constraint failed: t.id")
   end
 
+  specs.it "reports the primary and the extended result code" do |db|
+    db.exec("create table t (name text unique)").or_panic
+    db.exec("insert into t values ('a')").or_panic
+    error = db.exec("insert into t values ('a')")
+    if error.is_a?(SQLite3Error)
+      assert error.code == 19, "code #{error.code}"                         # SQLITE_CONSTRAINT
+      assert error.extended_code == 2067, "extended #{error.extended_code}" # SQLITE_CONSTRAINT_UNIQUE
+    else
+      assert false, "expected an SQLite3Error, got #{error.inspect}"
+    end
+  end
+
   # crystal-sqlite3 ran the first statement and dropped the rest unrun.
   specs.it "refuses a query with more than one statement" do |db|
     db.exec("create table t (a integer)").or_panic

@@ -89,7 +89,9 @@ the PRAGMAs below. With `prepared_statements=false` every query answers a
 `DBError`: SQLite has no unprepared statements.
 
 A failed SQLite call answers a `SQLite3Error` (module `sqlite/errors`), a
-`DBError` with SQLite's message and its result `code`.
+`DBError` with SQLite's message, its primary result `code` and its
+`extended_code` (`SQLITE_CONSTRAINT_UNIQUE`, 2067, where `code` is
+`SQLITE_CONSTRAINT`, 19).
 
 ### Types
 
@@ -194,6 +196,7 @@ end!
 | a statement whose step failed left active, and every later `COMMIT` on its connection refused | reset | |
 | `sqlite3_open_v2` called on a library built with `SQLITE_OMIT_AUTOINIT`, where it faults | `sqlite3_initialize` called first | |
 | a query's statements after the first dropped unrun | a `DBError` | |
+| `SQLite3::Exception#code` alone | `code` and `extended_code` | |
 | `SQLite3.flags(...)` macro | `Flag::READWRITE \| Flag::CREATE` | macros are derive-scoped (R-5) |
 
 ## Development

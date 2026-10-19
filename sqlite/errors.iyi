@@ -4,12 +4,17 @@ module sqlite/errors
 
 import db/db/errors::{DBError}
 
-# An invalid SQLite3 operation: SQLite's message for it and its result code.
+# An invalid SQLite3 operation: SQLite's message for it and its result codes.
 pub class SQLite3Error < DBError
-  # The internal code associated with the failure (`sqlite3_errcode`).
+  # The primary result code of the failure (`sqlite3_errcode`), such as
+  # `SQLITE_CONSTRAINT` (19).
   getter code : Int32
+  # The extended result code (`sqlite3_extended_errcode`), which says which
+  # kind of the primary code it is, such as `SQLITE_CONSTRAINT_UNIQUE`
+  # (2067). Its low eight bits are `code`.
+  getter extended_code : Int32
 
-  def initialize(message : String, @code : Int32)
+  def initialize(message : String, @code : Int32, @extended_code : Int32)
     super(message)
   end
 end

@@ -8,6 +8,8 @@
   `sqlite3_open_v2`.
 * A query with more than one statement answers a `DBError`. The statements
   after the first were dropped unrun.
+* `SQLite3Error#extended_code` is SQLite's extended result code
+  ([crystal-sqlite3#66](https://github.com/crystal-lang/crystal-sqlite3/issues/66)).
 
 ## v0.2.0
 

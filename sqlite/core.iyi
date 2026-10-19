@@ -150,6 +150,7 @@ lib LibSQLite3
   fun libversion = sqlite3_libversion : UInt8*
 
   fun errcode = sqlite3_errcode(SQLite3) : Int32
+  fun extended_errcode = sqlite3_extended_errcode(SQLite3) : Int32
   fun errmsg = sqlite3_errmsg(SQLite3) : UInt8*
 
   fun backup_init = sqlite3_backup_init(SQLite3, UInt8*, SQLite3, UInt8*) : SQLite3Backup
@@ -639,7 +640,7 @@ pub class SQLite3Connection < Connection
     # call is a no-op once the library is initialized.
     code = LibSQLite3.init
     unless code == Code::OKAY.value
-      error = SQLite3Error.new(c_string(LibSQLite3.errstr(code)), code)
+      error = SQLite3Error.new(c_string(LibSQLite3.errstr(code)), code & 0xff, code)
       return ConnectionRefused.new(error.message, error)
     end
 
@@ -758,9 +759,9 @@ pub class SQLite3Connection < Connection
   end
 
   # SQLite's error for the last call on this connection that failed:
-  # `sqlite3_errmsg` and `sqlite3_errcode`.
+  # `sqlite3_errmsg`, `sqlite3_errcode` and `sqlite3_extended_errcode`.
   def last_error : SQLite3Error
-    SQLite3Error.new(c_string(LibSQLite3.errmsg(@db)), LibSQLite3.errcode(@db))
+    SQLite3Error.new(c_string(LibSQLite3.errmsg(@db)), LibSQLite3.errcode(@db), LibSQLite3.extended_errcode(@db))
   end
 
   def to_unsafe : LibSQLite3::SQLite3
