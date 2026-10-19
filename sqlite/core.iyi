@@ -315,7 +315,7 @@ pub class SQLite3ResultSet < ResultSet
     value.to_u8? || out_of_range(index, value, "UInt8")
   end
 
-  def read(t : (UInt8 | Nil).class) : UInt8 | Nil | DBError
+  def read(t : UInt8?.class) : UInt8 | Nil | DBError
     index = @column_index
     value = read(Int64 | Nil)!
     return nil if value.nil?
@@ -328,7 +328,7 @@ pub class SQLite3ResultSet < ResultSet
     value.to_u16? || out_of_range(index, value, "UInt16")
   end
 
-  def read(t : (UInt16 | Nil).class) : UInt16 | Nil | DBError
+  def read(t : UInt16?.class) : UInt16 | Nil | DBError
     index = @column_index
     value = read(Int64 | Nil)!
     return nil if value.nil?
@@ -341,7 +341,7 @@ pub class SQLite3ResultSet < ResultSet
     value.to_u32? || out_of_range(index, value, "UInt32")
   end
 
-  def read(t : (UInt32 | Nil).class) : UInt32 | Nil | DBError
+  def read(t : UInt32?.class) : UInt32 | Nil | DBError
     index = @column_index
     value = read(Int64 | Nil)!
     return nil if value.nil?
@@ -354,7 +354,7 @@ pub class SQLite3ResultSet < ResultSet
     value.to_i8? || out_of_range(index, value, "Int8")
   end
 
-  def read(t : (Int8 | Nil).class) : Int8 | Nil | DBError
+  def read(t : Int8?.class) : Int8 | Nil | DBError
     index = @column_index
     value = read(Int64 | Nil)!
     return nil if value.nil?
@@ -367,7 +367,7 @@ pub class SQLite3ResultSet < ResultSet
     value.to_i16? || out_of_range(index, value, "Int16")
   end
 
-  def read(t : (Int16 | Nil).class) : Int16 | Nil | DBError
+  def read(t : Int16?.class) : Int16 | Nil | DBError
     index = @column_index
     value = read(Int64 | Nil)!
     return nil if value.nil?
@@ -380,7 +380,7 @@ pub class SQLite3ResultSet < ResultSet
     value.to_i32? || out_of_range(index, value, "Int32")
   end
 
-  def read(t : (Int32 | Nil).class) : Int32 | Nil | DBError
+  def read(t : Int32?.class) : Int32 | Nil | DBError
     index = @column_index
     value = read(Int64 | Nil)!
     return nil if value.nil?
@@ -391,7 +391,7 @@ pub class SQLite3ResultSet < ResultSet
     read(Float64)!.to_f32
   end
 
-  def read(t : (Float32 | Nil).class) : Float32 | Nil | DBError
+  def read(t : Float32?.class) : Float32 | Nil | DBError
     value = read(Float64 | Nil)!
     value ? value.to_f32 : nil
   end
@@ -400,7 +400,7 @@ pub class SQLite3ResultSet < ResultSet
     parse_time(read(String)!)
   end
 
-  def read(t : (Time | Nil).class) : Time | Nil | DBError
+  def read(t : Time?.class) : Time | Nil | DBError
     value = read(String | Nil)!
     value ? parse_time(value) : nil
   end
@@ -409,7 +409,7 @@ pub class SQLite3ResultSet < ResultSet
     read(Int64)! != 0
   end
 
-  def read(t : (Bool | Nil).class) : Bool | Nil | DBError
+  def read(t : Bool?.class) : Bool | Nil | DBError
     value = read(Int64 | Nil)!
     value ? value != 0 : nil
   end
