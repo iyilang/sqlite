@@ -142,6 +142,9 @@ lib LibSQLite3
 
   alias FuncCallback = (SQLite3Context, Int32, SQLite3Value*) -> Void
 
+  fun init = sqlite3_initialize : Int32
+  fun errstr = sqlite3_errstr(Int32) : UInt8*
+
   fun open_v2 = sqlite3_open_v2(filename : UInt8*, db : SQLite3*, flags : Int32, zVfs : UInt8*) : Int32
 
   fun libversion = sqlite3_libversion : UInt8*
@@ -614,6 +617,15 @@ pub class SQLite3Connection < Connection
   # PRAGMAs; `ConnectionRefused`, with SQLite's error as its cause, when any
   # of it fails.
   def self.open(options : Connection::Options, sqlite3_options : Options) : SQLite3Connection | DBError
+    # A library built with SQLITE_OMIT_AUTOINIT (Python's Windows DLL is
+    # one) is not initialized by `sqlite3_open_v2`, which then faults. The
+    # call is a no-op once the library is initialized.
+    code = LibSQLite3.init
+    unless code == Code::OKAY.value
+      error = SQLite3Error.new(c_string(LibSQLite3.errstr(code)), code)
+      return ConnectionRefused.new(error.message, error)
+    end
+
     db = uninitialized LibSQLite3::SQLite3
     flags = Flag::READWRITE | Flag::CREATE
     code = LibSQLite3.open_v2(to_c_string(sqlite3_options.filename), pointerof(db), flags.value, nil)

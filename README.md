@@ -192,6 +192,7 @@ end!
 | an empty `Bytes` argument bound as `NULL` (a null pointer) | bound as an empty blob | |
 | `REGEXP` raised through SQLite's frames, and crashed on `NULL` | an SQL error, and `NULL` | |
 | a statement whose step failed left active, and every later `COMMIT` on its connection refused | reset | |
+| `sqlite3_open_v2` called on a library built with `SQLITE_OMIT_AUTOINIT`, where it faults | `sqlite3_initialize` called first | |
 | `SQLite3.flags(...)` macro | `Flag::READWRITE \| Flag::CREATE` | macros are derive-scoped (R-5) |
 
 ## Development

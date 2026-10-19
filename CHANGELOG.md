@@ -3,6 +3,9 @@
 * A statement whose step fails is reset. It stayed active, and SQLite
   refused every later `COMMIT` on its connection
   ([crystal-sqlite3#115](https://github.com/crystal-lang/crystal-sqlite3/issues/115)).
+* SQLite is initialized before a connection opens. A library built with
+  `SQLITE_OMIT_AUTOINIT`, Python's Windows DLL among them, faulted in
+  `sqlite3_open_v2`.
 
 ## v0.2.0
 
