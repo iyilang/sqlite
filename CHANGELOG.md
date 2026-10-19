@@ -1,3 +1,16 @@
+## v0.2.0
+
+Requires iyi 0.18.0.
+
+* The entry point is the package's root module: `import sqlite` and
+  `Sqlite::VERSION`, `Sqlite::Any`, where they were
+  `import sqlite/sqlite/sqlite` and `Sqlite::Sqlite::...`. iyi 0.18.0 keeps
+  a module's artifact free of the modules under its path
+  ([iyi#124](https://github.com/iyilang/iyi/issues/124)), which kept the
+  entry point off the root. The other modules are where they were.
+* `REGEXP` reads text and pattern as UTF-8 characters, as iyi 0.18.0's
+  `Regex` does: `'çay' REGEXP '^.ay$'` is 1, where it was 0.
+
 ## v0.1.0
 
 The first release of iyi-sqlite: crystal-sqlite3 0.24.0 ported to iyi, in
@@ -8,15 +21,9 @@ iyi, on iyi-db 0.1.1, with no Crystal code left.
   the query run as PRAGMAs when a connection opens.
 * Prepared statements with `?` arguments, transactions and savepoints,
   `last_insert_id` and `rows_affected`, `SQLite3Connection#dump` through the
-  backup API, and a `regexp` function behind `REGEXP` that reads UTF-8
-  characters whole.
+  backup API, and a `regexp` function behind `REGEXP`.
 * Every integer type, `Float32`, `Bool` and `Time` (as UTC text) read and
   bound as crystal-sqlite3 reads and binds them.
-* Requires iyi 0.18.0, whose `Regex` reads whole UTF-8 characters, and whose
-  module artifacts leave the modules under a module's path to their own
-  ([iyi#124](https://github.com/iyilang/iyi/issues/124)): the entry point is
-  the package's root module, imported as `sqlite`, beside `sqlite/core`,
-  `sqlite/dates` and `sqlite/errors`.
 
 ### What iyi's rules changed
 
