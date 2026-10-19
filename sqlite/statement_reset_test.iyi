@@ -1,0 +1,48 @@
+# From crystal-sqlite3's pull request #116 (spec/statement_reset_spec.cr): a
+# statement whose step fails is reset, or it stays active on the connection
+# and SQLite refuses every later COMMIT there.
+module sqlite/statement_reset_test
+
+import db
+import db/db/core::{Database}
+import db/db/errors::{DBError}
+import db/db/spec::{describe, it}
+import sqlite/testing/spec_helper::*
+
+# One pooled connection, and no busy_timeout, so the refusal is immediate.
+def with_contended_db(& : Database -> Nil) : Nil
+  with_db("#{DB_FILENAME}?journal_mode=wal&busy_timeout=0&max_pool_size=1&initial_pool_size=1") do |db|
+    db.exec("create table t (id integer primary key, v text)").or_panic
+    db.exec("insert into t (id, v) values (1, 'first')").or_panic
+    yield db
+  end
+end
+
+# A write on *db* refused because a second connection holds the write lock.
+def refuse_a_write(db : Database) : Nil
+  ::Db.open("sqlite3:#{DB_FILENAME}?busy_timeout=0") do |holder|
+    holder.using_connection do |cnn|
+      cnn.exec("BEGIN IMMEDIATE").or_panic
+      refused = db.exec("update t set v = ? where id = 1", "second")
+      cnn.exec("COMMIT").or_panic
+      assert refused.is_a?(DBError), "the write was not refused"
+      nil
+    end.or_panic
+  end.or_panic
+end
+
+describe "a statement whose step fails" do
+  # not the refused statement's sql: re-running that would reset it by accident
+  it "does not stop the next transaction committing" do
+    with_contended_db do |db|
+      refuse_a_write(db)
+      db.transaction do |tx|
+        tx.connection.exec("update t set v = 'committed' where id = 1").or_panic
+        nil
+      end.or_panic
+      ::Db.open("sqlite3:#{DB_FILENAME}") do |peer|
+        assert peer.scalar("select v from t where id = 1").or_panic == "committed"
+      end.or_panic
+    end
+  end
+end

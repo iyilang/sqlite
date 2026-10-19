@@ -476,7 +476,14 @@ pub class SQLite3Statement < Statement
     while step == Code::ROW.value
       step = LibSQLite3.step(@stmt)
     end
-    return sqlite3_connection.last_error unless step == Code::DONE.value
+    unless step == Code::DONE.value
+      # Reset, or the statement stays active, and blocks COMMIT and the
+      # connection's next read transaction. The error is read off the
+      # connection first, before the reset touches it.
+      error = sqlite3_connection.last_error
+      LibSQLite3.reset(@stmt)
+      return error
+    end
 
     db = sqlite3_connection.to_unsafe
     rows_affected = LibSQLite3.changes(db).to_i64

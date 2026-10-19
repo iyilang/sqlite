@@ -1,3 +1,9 @@
+## Unreleased
+
+* A statement whose step fails is reset. It stayed active, and SQLite
+  refused every later `COMMIT` on its connection
+  ([crystal-sqlite3#115](https://github.com/crystal-lang/crystal-sqlite3/issues/115)).
+
 ## v0.2.0
 
 Requires iyi 0.18.0 and iyi-db 0.2.0.

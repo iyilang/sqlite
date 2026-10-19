@@ -191,6 +191,7 @@ end!
 | strings and blobs bound `SQLITE_STATIC`, kept alive by the statement | bound `SQLITE_TRANSIENT`: SQLite copies them | nothing has to outlive the call |
 | an empty `Bytes` argument bound as `NULL` (a null pointer) | bound as an empty blob | |
 | `REGEXP` raised through SQLite's frames, and crashed on `NULL` | an SQL error, and `NULL` | |
+| a statement whose step failed left active, and every later `COMMIT` on its connection refused | reset | |
 | `SQLite3.flags(...)` macro | `Flag::READWRITE \| Flag::CREATE` | macros are derive-scoped (R-5) |
 
 ## Development
