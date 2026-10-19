@@ -1,4 +1,4 @@
-## Unreleased
+## v0.3.1
 
 * Requires iyi-db 0.3.0, whose pool closes every connection it holds when
   a `Database` closes; it closed every other one, and left the rest of the
