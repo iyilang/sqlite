@@ -14,8 +14,7 @@ end
 
 describe "Driver" do
   it "should register sqlite3 name" do
-    # a metaclass's `==` is not the class's identity in iyi's prelude
-    assert ::Db::Db.driver_class("sqlite3").or_panic.to_s == SQLite3Driver.to_s
+    assert ::Db::Db.driver_class("sqlite3").or_panic == SQLite3Driver
   end
 
   it "should get filename from uri" do
