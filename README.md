@@ -12,7 +12,7 @@ require: errors are values, types are closed, and tasks are structured.
 
 ## Requirements
 
-iyi 0.17.0 or later, iyi-db 0.1.1 (required by this package's `iyi.mod`), and
+iyi 0.18.0 or later, iyi-db 0.1.1 (required by this package's `iyi.mod`), and
 the SQLite library (`libsqlite3`):
 
 * **Linux:** the development package, `apt install libsqlite3-dev`.
@@ -149,9 +149,10 @@ in no error by the library.
 ### REGEXP
 
 Every connection registers the `regexp` function, so `text REGEXP pattern`
-works, with iyi's `Regex` (RE2 semantics: no backreferences or lookaround). A
-pattern `Regex` refuses answers an SQL error naming it, and a `NULL` operand
-answers `NULL`.
+works, with iyi's `Regex` (RE2 semantics: no backreferences or lookaround),
+which reads text and pattern as UTF-8 characters, so `.` and `[ç]` match `ç`
+whole. A pattern `Regex` refuses answers an SQL error naming it, and a `NULL`
+operand answers `NULL`.
 
 ### Backups
 

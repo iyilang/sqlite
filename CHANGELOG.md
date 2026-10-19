@@ -8,9 +8,11 @@ iyi, on iyi-db 0.1.1, with no Crystal code left.
   the query run as PRAGMAs when a connection opens.
 * Prepared statements with `?` arguments, transactions and savepoints,
   `last_insert_id` and `rows_affected`, `SQLite3Connection#dump` through the
-  backup API, and a `regexp` function behind `REGEXP`.
+  backup API, and a `regexp` function behind `REGEXP` that reads UTF-8
+  characters whole.
 * Every integer type, `Float32`, `Bool` and `Time` (as UTC text) read and
   bound as crystal-sqlite3 reads and binds them.
+* Requires iyi 0.18.0, whose `Regex` reads whole UTF-8 characters.
 
 ### What iyi's rules changed
 

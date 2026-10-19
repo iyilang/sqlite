@@ -159,6 +159,11 @@ DriverSpecs.run do |specs|
     assert db.scalar("select 'matching text' REGEXP '^m'").or_panic == 1
   end
 
+  specs.it "reads whole UTF-8 characters in REGEXP" do |db|
+    assert db.scalar("select 'çay' REGEXP '^.ay$'").or_panic == 1
+    assert db.scalar("select 'ç' REGEXP '^[ç]$'").or_panic == 1
+  end
+
   # crystal-sqlite3 raised `Regex`'s exception through SQLite's frames.
   specs.it "answers an SQL error for a REGEXP pattern Regex refuses" do |db|
     expect_error(db.scalar("select 'text' REGEXP '('"), SQLite3Error, "unmatched '('", partial: true)
