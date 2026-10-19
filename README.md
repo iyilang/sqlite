@@ -12,7 +12,7 @@ require: errors are values, types are closed, and tasks are structured.
 
 ## Requirements
 
-iyi 0.18.0 or later, iyi-db 0.2.0 (required by this package's `iyi.mod`), and
+iyi 0.18.0 or later, iyi-db 0.3.0 (required by this package's `iyi.mod`), and
 the SQLite library (`libsqlite3`):
 
 * **Linux:** the development package, `apt install libsqlite3-dev`.
