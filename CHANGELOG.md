@@ -6,6 +6,8 @@
 * SQLite is initialized before a connection opens. A library built with
   `SQLITE_OMIT_AUTOINIT`, Python's Windows DLL among them, faulted in
   `sqlite3_open_v2`.
+* A query with more than one statement answers a `DBError`. The statements
+  after the first were dropped unrun.
 
 ## v0.2.0
 

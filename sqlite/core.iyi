@@ -458,10 +458,27 @@ pub class SQLite3Statement < Statement
   end
 
   # Compiles *command* on *connection*: the statement, or SQLite's error.
+  # SQLite compiles one statement at a time, so a command with another after
+  # its first is refused rather than having the rest dropped unrun.
   def self.prepare(connection : SQLite3Connection, command : String) : SQLite3Statement | DBError
+    db = connection.to_unsafe
     stmt = uninitialized LibSQLite3::Statement
-    code = LibSQLite3.prepare_v2(connection.to_unsafe, command.to_unsafe, command.bytesize, pointerof(stmt), nil)
+    tail = uninitialized UInt8*
+    code = LibSQLite3.prepare_v2(db, command.to_unsafe, command.bytesize, pointerof(stmt), pointerof(tail))
     return connection.last_error unless code == Code::OKAY.value
+
+    rest = command.bytesize - (tail.address - command.to_unsafe.address).to_i32
+    if rest > 0
+      # What follows compiles to no statement only when it is whitespace and
+      # comments.
+      extra = uninitialized LibSQLite3::Statement
+      code = LibSQLite3.prepare_v2(db, tail, rest, pointerof(extra), nil)
+      if code != Code::OKAY.value || extra.address != 0_u64
+        LibSQLite3.finalize(extra) if code == Code::OKAY.value
+        LibSQLite3.finalize(stmt)
+        return DBError.new("SQLite3 runs one statement per query, and #{command.inspect} has more than one")
+      end
+    end
     SQLite3Statement.new(connection, command, stmt)
   end
 
