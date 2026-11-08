@@ -1,4 +1,4 @@
-## Unreleased
+## v0.4.0
 
 Requires iyi 0.20.0 and iyi-db 0.4.0.
 
