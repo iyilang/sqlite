@@ -1,3 +1,14 @@
+## Unreleased
+
+Requires iyi 0.20.0 and iyi-db 0.4.0.
+
+* iyi-db 0.4.0's `Database` and `Pool` are `Share`: one kept in a constant
+  may be used by parallel tasks on every worker.
+* `REGEXP_FN` is marked `@[SafeReach]`, so a program that opens a SQLite
+  database builds without the reach warning on iyi-db's `Database.open`
+  block (SPEC.md III.4.4). The proc captures nothing and `regexp` keeps no
+  state.
+
 ## v0.3.1
 
 * Requires iyi-db 0.3.0, whose pool closes every connection it holds when

@@ -198,6 +198,7 @@ SQLITE_UTF8 = 1
 # The `regexp(pattern, text)` function SQLite's `REGEXP` operator calls,
 # registered on every connection. A pattern iyi's `Regex` refuses answers
 # an SQL error naming it; a `NULL` operand answers `NULL`.
+@[SafeReach("captures nothing, is assigned once and only read; regexp keeps no state between calls")]
 REGEXP_FN = ->(context : LibSQLite3::SQLite3Context, argc : Int32, argv : LibSQLite3::SQLite3Value*) do
   regexp(context, argv)
   nil
