@@ -1,7 +1,11 @@
 # crystal-sqlite3's spec/pool_spec.cr.
 #
 # crystal-sqlite3 spawned fibers and waited on a channel; here they are the
-# tasks of a group, which waits for them as it ends (SPEC.md III.4.1).
+# tasks of a group, which waits for them as it ends (SPEC.md III.4.1). They
+# stay in the test's unit, as crystal-sqlite3's fibers shared one thread:
+# a plain spawn of a block that captures only a `Share` `Database` runs in
+# parallel (III.4.15), and two connections writing at once with no
+# `busy_timeout` are refused "database is locked".
 module sqlite/pool_test
 
 import db
@@ -17,7 +21,7 @@ describe "DB::Pool" do
 
       group do |g|
         fibers.times do |f|
-          g.spawn do
+          g.spawn(unit: :same) do
             (1..max_n).each do |n|
               db.exec("insert into numbers (n, fiber) values (?, ?)", n, f).or_panic
               sleep 10

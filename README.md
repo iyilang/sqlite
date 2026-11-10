@@ -12,7 +12,7 @@ require: errors are values, types are closed, and tasks are structured.
 
 ## Requirements
 
-iyi 0.20.0 or later, iyi-db 0.4.0 (required by this package's `iyi.mod`), and
+iyi 0.21.0 or later, iyi-db 0.5.0 (required by this package's `iyi.mod`), and
 the SQLite library (`libsqlite3`):
 
 * **Linux:** the development package, `apt install libsqlite3-dev`.
@@ -23,6 +23,10 @@ the SQLite library (`libsqlite3`):
   with `sqlite3.def`); make the import library from it in a Visual Studio
   developer prompt with `lib /def:sqlite3.def /out:sqlite3.lib /machine:x64`.
   A build copies `sqlite3.dll` beside the executable.
+
+0.21.0 refuses raw memory in a module that does not say it handles some
+(SPEC.md III.13), and a module says so with `@[Unsafe("why")]` above its
+`module` header, which 0.20.x refuses.
 
 ## Installation
 

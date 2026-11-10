@@ -28,24 +28,23 @@ pub def parse_time(text : String) : Time | DBError
   invalid = DBError.new("Invalid SQLite3 time: #{text.inspect}, expected #{DATE_FORMAT_SUBSECOND.inspect} or #{DATE_FORMAT_SECOND.inspect}")
   size = text.bytesize
   return invalid if size < 19
-  bytes = text.to_unsafe
-  return invalid unless bytes[4] == '-'.ord.to_u8 && bytes[7] == '-'.ord.to_u8 && bytes[10] == ' '.ord.to_u8 &&
-                        bytes[13] == ':'.ord.to_u8 && bytes[16] == ':'.ord.to_u8
+  return invalid unless text.byte_at(4) == '-'.ord.to_u8 && text.byte_at(7) == '-'.ord.to_u8 && text.byte_at(10) == ' '.ord.to_u8 &&
+                        text.byte_at(13) == ':'.ord.to_u8 && text.byte_at(16) == ':'.ord.to_u8
 
-  year = digits(bytes, 0, 4)
-  month = digits(bytes, 5, 2)
-  day = digits(bytes, 8, 2)
-  hour = digits(bytes, 11, 2)
-  minute = digits(bytes, 14, 2)
-  second = digits(bytes, 17, 2)
+  year = digits(text, 0, 4)
+  month = digits(text, 5, 2)
+  day = digits(text, 8, 2)
+  hour = digits(text, 11, 2)
+  minute = digits(text, 14, 2)
+  second = digits(text, 17, 2)
   return invalid if year < 0 || month < 1 || month > 12 || day < 1 || day > Time.days_in_month(year, month)
   return invalid if hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59
 
   nanosecond = 0
   if size > 19
     fraction = size - 20
-    return invalid unless bytes[19] == '.'.ord.to_u8 && fraction >= 1 && fraction <= 9
-    nanosecond = digits(bytes, 20, fraction)
+    return invalid unless text.byte_at(19) == '.'.ord.to_u8 && fraction >= 1 && fraction <= 9
+    nanosecond = digits(text, 20, fraction)
     return invalid if nanosecond < 0
     (9 - fraction).times { nanosecond *= 10 }
   end
@@ -53,12 +52,12 @@ pub def parse_time(text : String) : Time | DBError
   Time.utc(year, month, day, hour, minute, second, nanosecond: nanosecond)
 end
 
-# The number written in the *count* ASCII digits at *start*, or -1 when one
-# of them is not a digit.
-private def digits(bytes : Pointer(UInt8), start : Int32, count : Int32) : Int32
+# The number written in the *count* ASCII digits at byte *start* of *text*,
+# or -1 when one of them is not a digit.
+private def digits(text : String, start : Int32, count : Int32) : Int32
   value = 0
   count.times do |i|
-    byte = bytes[start + i]
+    byte = text.byte_at(start + i)
     return -1 unless byte >= '0'.ord.to_u8 && byte <= '9'.ord.to_u8
     value = value * 10 + (byte - '0'.ord.to_u8).to_i32
   end
