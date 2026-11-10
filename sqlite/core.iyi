@@ -8,6 +8,7 @@
 #
 # The names carry a `SQLite3` prefix because this module imports iyi-db's
 # `Connection`, `Statement` and `ResultSet` by those names.
+@[Unsafe("calls libsqlite3 through its C binding with the connection and statement handles it answers, passing text and blobs by pointer and copying the text and blobs it answers out of the library's memory")]
 module sqlite/core
 
 import std/int
@@ -198,7 +199,7 @@ SQLITE_UTF8 = 1
 # The `regexp(pattern, text)` function SQLite's `REGEXP` operator calls,
 # registered on every connection. A pattern iyi's `Regex` refuses answers
 # an SQL error naming it; a `NULL` operand answers `NULL`.
-@[SafeReach("captures nothing, is assigned once and only read; regexp keeps no state between calls")]
+@[UnsafeReach("captures nothing and is only read: sqlite3_create_function keeps its pointer and calls it, and regexp keeps no state between calls")]
 REGEXP_FN = ->(context : LibSQLite3::SQLite3Context, argc : Int32, argv : LibSQLite3::SQLite3Value*) do
   regexp(context, argv)
   nil

@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       # The oldest iyi this release supports (README, Requirements).
-      IYI_VERSION: 0.20.0
+      IYI_VERSION: 0.21.0
     steps:
       - uses: actions/checkout@v4
 

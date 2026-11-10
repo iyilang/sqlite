@@ -1,3 +1,23 @@
+## Unreleased
+
+Requires iyi 0.21.0 and iyi-db 0.5.0. iyi 0.21.0 refuses an operation on
+raw memory in a module that is not marked `@[Unsafe("why")]` (SPEC.md
+III.13), and 0.20.x refuses the mark above a `module` header, so no source
+of this driver compiles on both.
+
+* `sqlite/core`, the module that calls libsqlite3, says so, with why.
+* `sqlite/dates` no longer touches raw memory: it reads a time's text
+  through `byte_at`, so the compiler checks every index.
+* `REGEXP_FN` is marked `@[UnsafeReach]`. 0.21.0 proves a `@[SafeReach]`
+  claim instead of taking it on trust, and handing the proc to
+  `sqlite3_create_function` is beyond the proof; a module marked
+  `@[Unsafe]` keeps the claim on trust that way (SPEC.md III.4.4).
+* `sqlite/pool_test`'s writers stay in the test's unit
+  (`spawn(unit: :same)`), as crystal-sqlite3's fibers shared a thread.
+  0.21.0 runs a plain spawn that captures only a `Share` `Database` in
+  parallel (SPEC.md III.4.15), and two SQLite connections writing at once
+  with no `busy_timeout` are refused "database is locked".
+
 ## v0.4.0
 
 Requires iyi 0.20.0 and iyi-db 0.4.0.
