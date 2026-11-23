@@ -28,7 +28,7 @@ end
 describe "Connection" do
   it "opens a database and then backs it up to another db" do
     with_db do |db|
-      with_db("./test2.db") do |backup_db|
+      with_db(BACKUP_FILENAME) do |backup_db|
         db.exec("create table person (name text, age integer)").or_panic
         db.exec("insert into person values (\"foo\", 10)").or_panic
 

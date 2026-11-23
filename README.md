@@ -12,7 +12,7 @@ require: errors are values, types are closed, and tasks are structured.
 
 ## Requirements
 
-iyi 0.21.0 or later, iyi-db 0.5.0 (required by this package's `iyi.mod`), and
+iyi 0.22.0 or later, iyi-db 0.6.0 (required by this package's `iyi.mod`), and
 the SQLite library (`libsqlite3`):
 
 * **Linux:** the development package, `apt install libsqlite3-dev`.
@@ -24,6 +24,7 @@ the SQLite library (`libsqlite3`):
   developer prompt with `lib /def:sqlite3.def /out:sqlite3.lib /machine:x64`.
   A build copies `sqlite3.dll` beside the executable.
 
+0.22.0 writes `iyi.sum` lines as `h2:`, which 0.21.0 does not read.
 0.21.0 refuses raw memory in a module that does not say it handles some
 (SPEC.md III.13), and a module says so with `@[Unsafe("why")]` above its
 `module` header, which 0.20.x refuses.
@@ -210,8 +211,10 @@ iyi test sqlite
 ```
 
 The tests are crystal-sqlite3's specs, ported, beside the modules they test,
-and iyi-db's shared driver specs (`sqlite/driver_specs_test.iyi`). They write
-`./test.db` and `./test2.db` in the working directory and delete them.
+and iyi-db's shared driver specs (`sqlite/driver_specs_test.iyi`). Each test
+file writes `./test-<pid>.db` and `./test2-<pid>.db` in the working
+directory and deletes them, so the files `iyi test` runs at once do not share
+a database.
 `examples/` holds crystal-sqlite3's sample, ported.
 
 ## Contributors

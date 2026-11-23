@@ -1,3 +1,18 @@
+## Unreleased
+
+Requires iyi 0.22.0 and iyi-db 0.6.0. 0.22.0 writes `iyi.sum` lines as
+`h2:`, a SHA-256 that says where each file ends, which 0.21.0 does not
+read, and iyi-db 0.6.0 requires 0.22.0. The driver's source is unchanged.
+
+* `iyi.sum` records iyi-db 0.6.0 in the `h2:` form.
+* Each test file opens `./test-<pid>.db` and `./test2-<pid>.db`, where
+  every one opened `./test.db` and `./test2.db`. 0.22.0's `iyi test` runs
+  several test files at once, and two of them deleted one database under
+  each other: `pool_test` failed with "disk I/O error" and
+  `result_set_test` with "attempt to write a readonly database".
+* CI runs on iyi 0.22.0, and fetches the modules before the tests are
+  built ([iyi#246](https://github.com/iyilang/iyi/issues/246)).
+
 ## v0.5.0
 
 Requires iyi 0.21.0 and iyi-db 0.5.0. iyi 0.21.0 refuses an operation on
