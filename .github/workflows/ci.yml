@@ -24,6 +24,12 @@ jobs:
 
       - run: iyi version
 
+      # iyi 0.22.0's `iyi test` builds several tests at once, and in a cold
+      # module cache they race fetching iyi-db (iyilang/iyi#246): fetch it
+      # first, which also checks that iyi.mod and iyi.sum are tidy.
+      - name: Fetch modules
+        run: iyi mod tidy --check
+
       - name: Test
         run: iyi test sqlite
 

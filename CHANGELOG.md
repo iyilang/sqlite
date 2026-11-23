@@ -10,7 +10,8 @@ read, and iyi-db 0.6.0 requires 0.22.0. The driver's source is unchanged.
   several test files at once, and two of them deleted one database under
   each other: `pool_test` failed with "disk I/O error" and
   `result_set_test` with "attempt to write a readonly database".
-* CI runs on iyi 0.22.0.
+* CI runs on iyi 0.22.0, and fetches the modules before the tests are
+  built ([iyi#246](https://github.com/iyilang/iyi/issues/246)).
 
 ## v0.5.0
 
