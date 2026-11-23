@@ -1,15 +1,20 @@
 # What the tests share: crystal-sqlite3's `spec/spec_helper.cr`.
 #
 # Every database is a file in the working directory, deleted before and
-# after the example that opens it.
+# after the example that opens it. Its name carries the process id:
+# `iyi test` runs several test files at once, and two of them opening
+# one file deleted it under each other ("disk I/O error", "attempt to
+# write a readonly database").
 module sqlite/testing/spec_helper
 
 import std/uri::{URI}
+import std/process::{Process}
 import db
 import db/db/core::{Database, Connection}
 import sqlite/core::{SQLite3Connection}
 
-pub DB_FILENAME = "./test.db"
+pub DB_FILENAME     = "./test-#{Process.pid}.db"
+pub BACKUP_FILENAME = "./test2-#{Process.pid}.db"
 
 # Opens `DB_FILENAME` as a pooled database for the block.
 pub def with_db(& : Database -> Nil) : Nil
